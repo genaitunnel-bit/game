@@ -885,6 +885,10 @@ const Scenes = (() => {
    ====================================================== */
 function render() {
   try {
+    // 前のシーンの root.onclick を必ずクリア（ストーリー画面のクリックが残留するのを防ぐ）
+    const _root = document.getElementById('root');
+    if (_root) _root.onclick = null;
+
     // ゲームオーバーチェック
     if (G.player && G.player.baseHp <= 0 && G.phase !== 'title' && G.phase !== 'story') {
       Scenes.renderGameOver(false, '自陣が壊滅してしまった……。天使の粛清を止めることはできなかった。');
