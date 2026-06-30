@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>スパイ大作戦 - 情報戦ゲーム</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --text: #c9d1d9;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --yellow: #d29922;
+  --red: #f85149;
+  --gold: #ffd700;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Segoe UI', Meiryo, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+#root { max-width: 900px; margin: 0 auto; padding: 16px; }
+
+/* BUTTONS */
+.btn {
+  display: inline-block; padding: 10px 20px; border-radius: 8px;
+  border: none; cursor: pointer; font-size: 14px; font-weight: 600;
+  transition: all 0.15s; font-family: inherit; text-align: center;
+}
+.btn:hover { filter: brightness(1.15); }
+.btn.disabled, .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-danger  { background: var(--red); color: #fff; }
+.btn-success { background: var(--green); color: #fff; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+.btn-warn { background: var(--yellow); color: #000; }
+
+/* LAYOUT */
+.screen { display: flex; flex-direction: column; gap: 16px; }
+.center-screen { align-items: center; justify-content: center; min-height: 80vh; }
+.header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 16px; background: var(--surface); border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.header h2 { font-size: 18px; }
+.resources { display: flex; gap: 16px; flex-wrap: wrap; }
+.resource {
+  background: var(--surface2); padding: 4px 12px; border-radius: 20px;
+  font-size: 13px; border: 1px solid var(--border);
+}
+.action-bar { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* CARDS */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px;
+}
+
+/* HP BAR */
+.hp-bar-wrap {
+  width: 100%; height: 10px; background: var(--surface2);
+  border-radius: 5px; overflow: hidden; margin: 6px 0;
+}
+.hp-bar-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+
+/* TITLE SCREEN */
+.title-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 48px 40px; text-align: center;
+  max-width: 560px; width: 100%;
+}
+.title-icon { font-size: 4rem; margin-bottom: 12px; }
+h1 { font-size: 2rem; color: var(--accent); margin-bottom: 4px; }
+.subtitle { color: #888; margin-bottom: 20px; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.intro-text { line-height: 1.8; margin-bottom: 16px; }
+.tip-box {
+  background: var(--surface2); border-left: 3px solid var(--yellow);
+  padding: 12px 16px; border-radius: 0 8px 8px 0; text-align: left;
+  margin-bottom: 24px; line-height: 1.7; font-size: 13px;
+}
+
+/* MAP */
+.map-area { background: var(--surface); border-radius: 10px; border: 1px solid var(--border); padding: 16px; }
+.map-label { font-size: 13px; color: #888; margin-bottom: 12px; }
+.enemy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.enemy-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; text-align: center; transition: border-color 0.2s;
+}
+.enemy-card:not(.engaged):hover { border-color: var(--accent); }
+.enemy-card.engaged { opacity: 0.6; }
+.enemy-icon { font-size: 2.5rem; margin-bottom: 6px; }
+.enemy-name { font-weight: 700; margin-bottom: 2px; }
+.enemy-rank { color: var(--gold); font-size: 13px; margin-bottom: 6px; }
+.enemy-desc { font-size: 12px; color: #888; margin-bottom: 10px; line-height: 1.5; }
+.engaged-label { font-size: 12px; padding: 4px 8px; border-radius: 4px; background: var(--surface); }
+
+/* BATTLE */
+.battle-area {
+  display: flex; align-items: center; justify-content: space-around;
+  gap: 16px; background: var(--surface); border-radius: 10px;
+  border: 1px solid var(--border); padding: 24px;
+}
+.combatant { text-align: center; flex: 1; }
+.combatant-name { font-weight: 700; margin-bottom: 8px; }
+.combatant-icon { font-size: 3rem; margin-bottom: 8px; }
+.vs { font-size: 1.5rem; font-weight: 900; color: var(--red); flex-shrink: 0; }
+.capture-ready {
+  background: var(--green); color: #fff; padding: 4px 12px;
+  border-radius: 20px; font-size: 12px; font-weight: 700; margin-top: 6px;
+  display: inline-block; animation: pulse 1s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+.battle-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.battle-log {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px; max-height: 150px; overflow-y: auto;
+}
+
+/* LOG */
+.log-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px;
+}
+.log-entry { font-size: 13px; padding: 3px 0; color: #aaa; border-bottom: 1px solid var(--border); }
+.log-entry:last-child { border-bottom: none; }
+
+/* POST BATTLE */
+.center-content { display: flex; flex-direction: column; align-items: center; gap: 20px; padding: 40px 0; }
+.capture-success { text-align: center; }
+.capture-success h2 { font-size: 1.8rem; color: var(--green); margin: 12px 0 8px; }
+.capture-success .note { font-size: 13px; color: #888; margin-top: 8px; }
+.post-battle-actions { display: flex; gap: 12px; }
+
+/* INTERROGATE */
+.interrogate-area { display: flex; flex-direction: column; gap: 16px; }
+.prisoner-card {
+  background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 10px; padding: 20px; text-align: center;
+}
+.prisoner-card h3 { margin: 8px 0 4px; }
+.prisoner-card .note { font-size: 12px; color: #888; margin-top: 8px; }
+.item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.item-grid h3 { grid-column: 1/-1; }
+.item-card {
+  background: var(--surface); border: 2px solid var(--border);
+  border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s;
+  text-align: center;
+}
+.item-card:hover:not(.cant-afford) { border-color: var(--accent); transform: translateY(-2px); }
+.item-card.cant-afford { opacity: 0.5; cursor: not-allowed; }
+.item-icon { font-size: 2rem; margin-bottom: 6px; }
+.item-name { font-weight: 700; margin-bottom: 4px; }
+.item-cost { color: var(--gold); font-size: 13px; margin-bottom: 4px; }
+.item-desc { font-size: 12px; color: #888; margin-bottom: 8px; line-height: 1.5; }
+.item-acc { font-size: 13px; }
+.acc-value { font-weight: 700; }
+.cant-afford-label { color: var(--red); font-size: 12px; font-weight: 700; margin-top: 4px; }
+
+/* INTEL CARDS */
+.intel-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px; margin-bottom: 8px;
+}
+.intel-card.own-intel { border-color: var(--yellow); background: #1a160a; }
+.intel-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.intel-name { font-weight: 700; }
+.intel-acc { font-weight: 700; font-size: 14px; }
+.intel-content { line-height: 1.6; margin-bottom: 8px; }
+.intel-meta { font-size: 12px; color: #666; }
+.accuracy-note {
+  background: var(--surface2); border-left: 3px solid var(--accent);
+  padding: 12px; border-radius: 0 8px 8px 0; font-size: 13px;
+  line-height: 1.7; margin-top: 8px;
+}
+.intel-mini {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 10px; background: var(--surface2); border-radius: 6px;
+  margin-bottom: 4px; font-size: 13px;
+}
+.intel-mini.own { background: #1a160a; border-left: 3px solid var(--yellow); }
+.acc-badge { font-weight: 700; font-size: 12px; }
+.intel-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+.intel-summary h3 { margin-bottom: 10px; }
+
+/* ATTACK PLAN */
+.strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+.strategy-card {
+  background: var(--surface); border: 2px solid var(--border);
+  border-radius: 10px; padding: 16px; cursor: pointer; transition: all 0.15s;
+  text-align: center;
+}
+.strategy-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.strategy-icon { font-size: 2.5rem; margin-bottom: 8px; }
+.strategy-name { font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+.strategy-desc { font-size: 12px; color: #888; margin-bottom: 10px; line-height: 1.5; }
+.strategy-intel { font-size: 11px; color: #666; margin-bottom: 4px; }
+.strategy-acc { font-size: 13px; font-weight: 600; }
+.warning-box {
+  background: #1a160a; border: 1px solid var(--yellow);
+  border-radius: 10px; padding: 16px;
+}
+.warning-box h3 { color: var(--yellow); margin-bottom: 8px; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 10px; font-size: 14px; }
+.checkbox-label input { width: 16px; height: 16px; cursor: pointer; }
+
+/* RESULT */
+.result-box {
+  background: var(--surface); border: 2px solid;
+  border-radius: 16px; padding: 40px; text-align: center;
+  max-width: 520px; width: 100%;
+}
+.result-box h1 { font-size: 2rem; margin: 12px 0 16px; }
+.score-display { margin: 12px 0 20px; }
+.score-bar-wrap {
+  width: 100%; height: 16px; background: var(--surface2);
+  border-radius: 8px; overflow: hidden; margin-bottom: 8px;
+}
+.score-bar-fill { height: 100%; border-radius: 8px; transition: width 1s; }
+.result-desc { line-height: 1.8; margin-bottom: 20px; }
+.result-details {
+  background: var(--surface2); border-radius: 8px; padding: 14px;
+  text-align: left; margin-bottom: 20px; font-size: 14px; line-height: 2;
+}
+
+/* MISC */
+.note { font-size: 13px; color: #888; }
+.empty { color: #555; text-align: center; padding: 20px; }
+.section-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+
+// =====================
+// DATA
+// =====================
+
+const ENEMY_DEFS = [
+  {
+    id:'private', name:'一般兵', rank:1, hp:30, atk:8, def:3,
+    resist:20, captureAt:50, icon:'🪖', gold:30,
+    desc:'最前線の兵士。基本的な情報を持つ。捕縛は容易。',
+    knownIntel:['patrol','gate_def']
+  },
+  {
+    id:'sergeant', name:'軍曹', rank:2, hp:65, atk:14, def:7,
+    resist:40, captureAt:35, icon:'💂', gold:70,
+    desc:'小隊を率いる下士官。戦術情報を保有。そこそこ強い。',
+    knownIntel:['patrol','gate_def','troops','supply']
+  },
+  {
+    id:'lieutenant', name:'中尉', rank:3, hp:110, atk:22, def:14,
+    resist:65, captureAt:25, icon:'⚔️', gold:150,
+    desc:'前線将校。機密性の高い情報を知っている。手強い相手。',
+    knownIntel:['troops','commander','passage','own_wall']
+  },
+  {
+    id:'colonel', name:'大佐', rank:4, hp:160, atk:30, def:22,
+    resist:85, captureAt:15, icon:'🦅', gold:300,
+    desc:'高級将校。最高機密を握るが情報を絶対に漏らさない。極めて危険。',
+    knownIntel:['commander','passage','own_wall','supply']
+  },
+];
+
+const ITEM_DEFS = [
+  {id:'rations', name:'粗末な食事', cost:0,   bonus:-25, icon:'🍞', desc:'最低限の食事。ほとんど情報は引き出せない。'},
+  {id:'gold',    name:'金貨100枚',  cost:100,  bonus:0,   icon:'💰', desc:'標準的な賄賂。そこそこの情報が得られる。'},
+  {id:'jewels',  name:'高価な宝石', cost:300,  bonus:30,  icon:'💎', desc:'豪華な贈り物。精度の高い情報が引き出せる。'},
+  {id:'artifact',name:'古代の秘宝', cost:800,  bonus:55,  icon:'🏺', desc:'伝説の宝。ほぼ正確な情報を引き出せる。'},
+];
+
+const INTEL_POOL = [
+  {
+    id:'gate_def', name:'正門の守備力', category:'enemy',
+    trueText: '正門の守備は非常に堅固（守備値75/100）。正面突破には大きなリスクが伴う。',
+    falseText:'正門の守備は手薄だ（守備値20/100）。正面突破は容易に見える。',
+    relevantFor:['frontal'],
+  },
+  {
+    id:'commander', name:'司令官の弱点', category:'enemy',
+    trueText: '司令官は炎系の攻撃に著しく弱い。暗殺作戦で炎を使えば大きな効果がある。',
+    falseText:'司令官は氷系の攻撃に弱いという噂だ。',
+    relevantFor:['assassination'],
+  },
+  {
+    id:'passage', name:'秘密の抜け穴', category:'enemy',
+    trueText: '東の外壁に秘密の抜け穴がある。少人数での潜入が可能だ。',
+    falseText:'南の川底に秘密のトンネルがあるという情報を得た。',
+    relevantFor:['infiltration'],
+  },
+  {
+    id:'troops', name:'兵力の配置', category:'enemy',
+    trueText: '兵力の8割が正門周辺に集中している。側面と後方は手薄だ。',
+    falseText:'兵力は均等に配置されており、すべての側面が堅固に守られている。',
+    relevantFor:['flanking'],
+  },
+  {
+    id:'patrol', name:'巡回スケジュール', category:'enemy',
+    trueText: '夜明け前の1時間、見張りの人数が最も少なくなる。その時が好機だ。',
+    falseText:'深夜0時に警備の交代があり、その瞬間は無防備になるという。',
+    relevantFor:['infiltration','flanking'],
+  },
+  {
+    id:'supply', name:'補給ルート', category:'enemy',
+    trueText: '補給は毎週北の街道から届く。これを断てば敵は数日で弱体化する。',
+    falseText:'補給は毎日南の港から届いているという情報だ。',
+    relevantFor:['flanking'],
+  },
+  {
+    id:'own_wall', name:'⚠️ 自陣の弱点', category:'own',
+    trueText: '【警告】自軍の北の外壁は老朽化し、防衛が著しく手薄！敵もこれを把握している可能性がある。',
+    falseText:'自軍の城壁はすべて堅固に守られている。弱点はない。',
+    relevantFor:[],
+    penalty: 28,
+  },
+];
+
+const STRATEGIES = [
+  {
+    id:'frontal', name:'正面突破', icon:'⚔️',
+    desc:'全軍で正門に突撃する。門の守備情報が成否を左右する。',
+    relevantIntel:['gate_def'], baseSuccess:45,
+  },
+  {
+    id:'flanking', name:'側面迂回', icon:'🏇',
+    desc:'兵力の薄い側面を狙う。兵力配置・補給・巡回情報が重要。',
+    relevantIntel:['troops','supply','patrol'], baseSuccess:50,
+  },
+  {
+    id:'assassination', name:'暗殺作戦', icon:'🗡️',
+    desc:'少数精鋭で司令官を直接狙う。弱点情報が不可欠。',
+    relevantIntel:['commander'], baseSuccess:35,
+  },
+  {
+    id:'infiltration', name:'潜入工作', icon:'🕵️',
+    desc:'秘密の経路で内部に潜入し内側から崩す。抜け穴と巡回情報が鍵。',
+    relevantIntel:['passage','patrol'], baseSuccess:40,
+  },
+];
+
+// =====================
+// STATE
+// =====================
+
+let S = {};
+
+function initState() {
+  S = {
+    phase: 'intro',
+    player: { hp:100, maxHp:100, gold:1000 },
+    map: ENEMY_DEFS.map((def, i) => ({
+      ...def, currentHp: def.hp, engaged: false, captured: false, pos: i
+    })),
+    battle: null,
+    currentEnemy: null,
+    capturedEnemies: [],
+    intel: [],
+    lastIntel: [],
+    log: [],
+    northWallReinforced: false,
+    attackResult: null,
+  };
+}
+
+// =====================
+// BATTLE
+// =====================
+
+function startBattle(pos) {
+  const enemy = S.map.find(e => e.pos === pos);
+  if (!enemy || enemy.engaged) return;
+  S.phase = 'battle';
+  S.currentEnemy = { ...enemy };
+  S.battle = { enemyHp: enemy.hp, enemyMaxHp: enemy.hp, log: [], turn: 0, defending: false };
+  S.log.push(`${enemy.name}との戦闘開始！`);
+  render();
+}
+
+function battleAction(action) {
+  if (S.phase !== 'battle') return;
+  const b = S.battle;
+  const e = S.currentEnemy;
+  b.turn++;
+  b.defending = false;
+
+  if (action === 'attack') {
+    const dmg = Math.max(1, 8 + Math.floor(Math.random() * 8) - e.def);
+    b.enemyHp = Math.max(0, b.enemyHp - dmg);
+    b.log.push(`あなたの攻撃 → ${e.name}に ${dmg} ダメージ！（残HP: ${b.enemyHp}/${b.enemyMaxHp}）`);
+  } else if (action === 'defend') {
+    b.defending = true;
+    b.log.push(`防御態勢を取った。この턴のダメージを軽減する。`);
+  } else if (action === 'capture') {
+    const hpPct = (b.enemyHp / b.enemyMaxHp) * 100;
+    if (hpPct > e.captureAt) {
+      b.log.push(`${e.name}はまだ元気すぎて捕縛できない！HP${e.captureAt}%以下が必要。`);
+    } else {
+      S.map.find(m => m.pos === e.pos).engaged = true;
+      S.map.find(m => m.pos === e.pos).captured = true;
+      S.capturedEnemies.push({ ...e });
+      S.player.gold += e.gold;
+      S.log.push(`${e.name}を捕縛！ ${e.gold}G 獲得。`);
+      S.phase = 'post_battle';
+      render();
+      return;
+    }
+  }
+
+  // Enemy counterattack
+  if (b.enemyHp > 0) {
+    const defBonus = b.defending ? 10 : 0;
+    const eDmg = Math.max(1, e.atk - defBonus + Math.floor(Math.random() * 6) - 3);
+    S.player.hp = Math.max(0, S.player.hp - eDmg);
+    b.log.push(`${e.name}の反撃 → あなたに ${eDmg} ダメージ。（残HP: ${S.player.hp}/${S.player.maxHp}）`);
+  }
+
+  if (S.player.hp <= 0) {
+    S.attackResult = { outcome:'player_dead', score:0 };
+    S.phase = 'result';
+  }
+  render();
+}
+
+function flee() {
+  S.map.find(m => m.pos === S.currentEnemy.pos).engaged = true;
+  S.log.push(`${S.currentEnemy.name}から逃走した。`);
+  S.phase = 'map';
+  S.battle = null;
+  S.currentEnemy = null;
+  render();
+}
+
+// =====================
+// INTERROGATION
+// =====================
+
+function doInterrogate(itemId) {
+  const item = ITEM_DEFS.find(i => i.id === itemId);
+  if (item.cost > S.player.gold) { alert('ゴールドが足りません！'); return; }
+  S.player.gold -= item.cost;
+
+  const e = S.currentEnemy;
+  const baseAcc = 65 - (e.resist * 0.4);
+  const finalAcc = Math.min(95, Math.max(10, Math.round(baseAcc + item.bonus)));
+
+  const gathered = new Set(S.intel.map(i => i.id));
+  const available = e.knownIntel.filter(id => !gathered.has(id));
+
+  if (available.length === 0) {
+    alert('この捕虜からは新しい情報は得られなかった。');
+    S.phase = 'map'; render(); return;
+  }
+
+  const shuffled = [...available].sort(() => Math.random() - 0.5);
+  const count = Math.min(available.length, e.rank <= 2 ? 1 : 2);
+  const picked = shuffled.slice(0, count);
+
+  const newIntel = picked.map(id => {
+    const tpl = INTEL_POOL.find(t => t.id === id);
+    const isTrue = Math.random() * 100 < finalAcc;
+    return {
+      id: tpl.id,
+      name: tpl.name,
+      category: tpl.category,
+      content: isTrue ? tpl.trueText : tpl.falseText,
+      accuracy: finalAcc,
+      isTrue,
+      relevantFor: tpl.relevantFor,
+      penalty: tpl.penalty || 0,
+      fromEnemy: e.name,
+      itemUsed: item.name,
+    };
+  });
+
+  S.intel.push(...newIntel);
+  S.lastIntel = newIntel;
+  S.phase = 'intel_result';
+  render();
+}
+
+// =====================
+// ATTACK
+// =====================
+
+function doAttack(strategyId) {
+  const strategy = STRATEGIES.find(s => s.id === strategyId);
+  let score = strategy.baseSuccess;
+
+  const relevant = S.intel.filter(i => strategy.relevantIntel.includes(i.id));
+  for (const intel of relevant) {
+    if (intel.isTrue) {
+      score += 18;
+    } else {
+      score -= (intel.accuracy >= 60 ? 22 : 8);
+    }
+  }
+
+  const ownWall = S.intel.find(i => i.id === 'own_wall');
+  if (ownWall && ownWall.isTrue && !S.northWallReinforced) score -= ownWall.penalty;
+
+  score += Math.floor(Math.random() * 20) - 10;
+  score = Math.max(0, Math.min(100, score));
+
+  let outcome, title, desc;
+  if (score >= 80) {
+    outcome = 'perfect';
+    title = '完全勝利！';
+    desc = '作戦は完璧に成功した。情報の正確さが敵の虚をつき、要塞は陥落した。司令官も捕縛に成功。';
+  } else if (score >= 60) {
+    outcome = 'victory';
+    title = '勝利！';
+    desc = '作戦は成功した。多少の損害はあったものの、敵要塞の占領に成功した。';
+  } else if (score >= 40) {
+    outcome = 'pyrrhic';
+    title = '辛勝…';
+    desc = '作戦はなんとか成功したが、誤情報が一部含まれていたため大きな損害を受けた。';
+  } else if (score >= 20) {
+    outcome = 'defeat';
+    title = '敗北…';
+    desc = '作戦は失敗した。情報の精度が低く、敵の守備を突破できなかった。撤退を余儀なくされる。';
+  } else {
+    outcome = 'catastrophe';
+    title = '壊滅的敗北…';
+    desc = '誤情報を信じた結果、罠にはまり壊滅的な損害を受けた。部隊は全滅寸前だ。';
+  }
+
+  S.attackResult = { outcome, title, desc, score, strategy };
+  S.phase = 'result';
+  render();
+}
+
+// =====================
+// RENDER
+// =====================
+
+function render() {
+  const root = document.getElementById('root');
+  const phases = {
+    intro: renderIntro,
+    map: renderMap,
+    battle: renderBattle,
+    post_battle: renderPostBattle,
+    interrogate: renderInterrogate,
+    intel_result: renderIntelResult,
+    intel_view: renderIntelView,
+    attack_plan: renderAttackPlan,
+    result: renderResult,
+  };
+  root.innerHTML = (phases[S.phase] || (() => '<p>不明なフェーズ</p>'))();
+}
+
+function hpBar(cur, max, color) {
+  const pct = Math.max(0, Math.min(100, (cur / max) * 100));
+  return `<div class="hp-bar-wrap"><div class="hp-bar-fill" style="width:${pct}%;background:${color||'#3fb950'}"></div></div><small>${cur}/${max} HP</small>`;
+}
+
+function accColor(acc) {
+  return acc >= 70 ? 'var(--green)' : acc >= 50 ? 'var(--yellow)' : 'var(--red)';
+}
+
+function renderIntro() {
+  return `<div class="screen center-screen">
+    <div class="title-box">
+      <div class="title-icon">🕵️</div>
+      <h1>スパイ大作戦</h1>
+      <p class="subtitle">— Intelligence War —</p>
+      <div class="divider"></div>
+      <p class="intro-text">
+        敵の要塞を攻略するため、まず偵察部隊を捕縛して情報を集めよ。<br>
+        情報の精度は使うアイテムと捕虜のランクによって変わる。<br>
+        集めた情報をもとに最適な作戦を立て、勝利をつかめ！
+      </p>
+      <div class="tip-box">
+        <strong>💡 ヒント</strong><br>
+        ・ 高ランクの捕虜は情報を出し渋る。高価なアイテムが必要。<br>
+        ・ 確度が低い情報は誤情報の可能性がある。<br>
+        ・ ⚠️ 自陣の弱点情報は攻撃前に対策を取れ！
+      </div>
+      <button class="btn btn-primary" onclick="S.phase='map';render()">ゲームスタート ▶</button>
+    </div>
+  </div>`;
+}
+
+function renderMap() {
+  const canAttack = S.intel.length > 0 || S.map.every(m => m.engaged);
+  return `<div class="screen">
+    <div class="header">
+      <h2>🗺️ 作戦マップ</h2>
+      <div class="resources">
+        <span class="resource">❤️ ${S.player.hp}/${S.player.maxHp}</span>
+        <span class="resource">💰 ${S.player.gold}G</span>
+        <span class="resource">📋 情報 ${S.intel.length}件</span>
+      </div>
+    </div>
+    <div class="map-area">
+      <div class="map-label">📍 敵偵察部隊 — 交戦して捕縛し、情報を引き出せ</div>
+      <div class="enemy-grid">
+        ${S.map.map(e => `
+          <div class="enemy-card ${e.engaged ? 'engaged' : ''}">
+            <div class="enemy-icon">${e.icon}</div>
+            <div class="enemy-name">${e.name}</div>
+            <div class="enemy-rank">${'★'.repeat(e.rank)}${'☆'.repeat(4-e.rank)}</div>
+            <div class="enemy-desc">${e.desc}</div>
+            ${e.engaged
+              ? `<div class="engaged-label">${e.captured ? '✅ 捕縛済' : '⚡ 交戦済'}</div>`
+              : `<button class="btn btn-sm btn-danger" onclick="startBattle(${e.pos})">⚔️ 交戦</button>`}
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="action-bar">
+      ${S.intel.length > 0 ? `<button class="btn btn-secondary" onclick="S.phase='intel_view';render()">📋 情報を確認 (${S.intel.length}件)</button>` : ''}
+      <button class="btn btn-primary ${canAttack ? '' : 'disabled'}" ${canAttack ? "onclick=\"S.phase='attack_plan';render()\"" : 'disabled'}>
+        ⚔️ 攻撃作戦を開始
+      </button>
+    </div>
+    ${S.log.length > 0 ? `<div class="log-box">${S.log.slice(-5).map(l => `<div class="log-entry">• ${l}</div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function renderBattle() {
+  const b = S.battle, e = S.currentEnemy;
+  const hpPct = (b.enemyHp / b.enemyMaxHp) * 100;
+  const canCapture = hpPct <= e.captureAt;
+  return `<div class="screen">
+    <div class="header">
+      <h2>⚔️ 戦闘</h2>
+      <div class="resources">
+        <span class="resource">❤️ ${S.player.hp}/${S.player.maxHp}</span>
+        <span class="resource">💰 ${S.player.gold}G</span>
+      </div>
+    </div>
+    <div class="battle-area">
+      <div class="combatant player-side">
+        <div class="combatant-name">あなた</div>
+        <div class="combatant-icon">🧑‍💼</div>
+        ${hpBar(S.player.hp, S.player.maxHp)}
+      </div>
+      <div class="vs">VS</div>
+      <div class="combatant enemy-side">
+        <div class="combatant-name">${e.name} ${'★'.repeat(e.rank)}</div>
+        <div class="combatant-icon">${e.icon}</div>
+        ${hpBar(b.enemyHp, b.enemyMaxHp, '#f85149')}
+        ${canCapture
+          ? `<div class="capture-ready">🔗 捕縛可能！</div>`
+          : `<small style="color:#888">HP ${e.captureAt}% 以下で捕縛可能</small>`}
+      </div>
+    </div>
+    <div class="battle-actions">
+      <button class="btn btn-danger"   onclick="battleAction('attack')">⚔️ 攻撃</button>
+      <button class="btn btn-secondary" onclick="battleAction('defend')">🛡️ 防御</button>
+      <button class="btn btn-success ${canCapture ? '' : 'disabled'}"
+        ${canCapture ? "onclick=\"battleAction('capture')\"" : 'disabled'}>🔗 捕縛</button>
+      <button class="btn btn-outline" onclick="flee()">🏃 逃走</button>
+    </div>
+    <div class="battle-log">
+      ${b.log.length === 0 ? '<div class="log-entry" style="color:#555">— 戦闘ログ —</div>' : ''}
+      ${b.log.slice(-8).map(l => `<div class="log-entry">• ${l}</div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function renderPostBattle() {
+  const e = S.currentEnemy;
+  return `<div class="screen center-screen">
+    <div class="capture-success">
+      <div style="font-size:3.5rem">${e.icon}</div>
+      <h2>${e.name}を捕縛！</h2>
+      <p>ランク ${'★'.repeat(e.rank)} の捕虜を確保。${e.gold}G 獲得。</p>
+      <p style="margin-top:10px">この捕虜を尋問しますか？<br>
+      <span class="note">高価なアイテムほど正確な情報が得られます。</span></p>
+    </div>
+    <div class="post-battle-actions">
+      <button class="btn btn-primary" onclick="S.phase='interrogate';render()">🗣️ 尋問する</button>
+      <button class="btn btn-secondary" onclick="S.phase='map';render()">⏭️ スキップ（マップへ）</button>
+    </div>
+  </div>`;
+}
+
+function renderInterrogate() {
+  const e = S.currentEnemy;
+  return `<div class="screen">
+    <div class="header">
+      <h2>🗣️ 尋問</h2>
+      <div class="resources"><span class="resource">💰 ${S.player.gold}G</span></div>
+    </div>
+    <div class="interrogate-area">
+      <div class="prisoner-card">
+        <div style="font-size:2.5rem">${e.icon}</div>
+        <h3>${e.name}</h3>
+        <p>ランク: ${'★'.repeat(e.rank)}</p>
+        <p>尋問抵抗: <strong style="color:${e.resist >= 70 ? 'var(--red)' : e.resist >= 40 ? 'var(--yellow)' : 'var(--green)'}">${e.resist}%</strong></p>
+        <p class="note" style="margin-top:8px">抵抗値が高いほど、情報の確度が下がります。</p>
+      </div>
+      <div class="item-grid">
+        <div class="section-title">使用するアイテムを選択してください：</div>
+        ${ITEM_DEFS.map(item => {
+          const baseAcc = 65 - (e.resist * 0.4);
+          const finalAcc = Math.min(95, Math.max(10, Math.round(baseAcc + item.bonus)));
+          const canAfford = item.cost <= S.player.gold;
+          return `<div class="item-card ${canAfford ? '' : 'cant-afford'}" onclick="${canAfford ? `doInterrogate('${item.id}')` : ''}">
+            <div class="item-icon">${item.icon}</div>
+            <div class="item-name">${item.name}</div>
+            <div class="item-cost">${item.cost === 0 ? '無料' : item.cost + 'G'}</div>
+            <div class="item-desc">${item.desc}</div>
+            <div class="item-acc">予想確度: <span class="acc-value" style="color:${accColor(finalAcc)}">${finalAcc}%</span></div>
+            ${!canAfford ? '<div class="cant-afford-label">💸 ゴールド不足</div>' : ''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+    <button class="btn btn-outline" onclick="S.phase='map';render()">← キャンセル</button>
+  </div>`;
+}
+
+function renderIntelResult() {
+  return `<div class="screen">
+    <div class="header"><h2>📋 入手情報</h2></div>
+    <div>
+      <p style="margin-bottom:12px">以下の情報を入手しました：</p>
+      ${S.lastIntel.map(intel => `
+        <div class="intel-card ${intel.category === 'own' ? 'own-intel' : ''}">
+          <div class="intel-header">
+            <span class="intel-name">${intel.name}</span>
+            <span class="intel-acc" style="color:${accColor(intel.accuracy)}">確度: ${intel.accuracy}%</span>
+          </div>
+          <div class="intel-content">${intel.content}</div>
+          <div class="intel-meta">情報源: ${intel.fromEnemy} ／ 使用: ${intel.itemUsed}</div>
+        </div>`).join('')}
+      <div class="accuracy-note">
+        <strong>確度について:</strong> 確度が高いほど情報が正確です。低い場合は誤情報の可能性があります。<br>
+        ⚠️ 自陣の弱点情報は攻撃前に対策を検討してください。
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="S.phase='map';render()">🗺️ マップへ戻る</button>
+  </div>`;
+}
+
+function renderIntelView() {
+  return `<div class="screen">
+    <div class="header"><h2>📋 収集情報一覧</h2></div>
+    <div>
+      ${S.intel.length === 0
+        ? '<p class="empty">まだ情報がありません。</p>'
+        : S.intel.map(intel => `
+          <div class="intel-card ${intel.category === 'own' ? 'own-intel' : ''}">
+            <div class="intel-header">
+              <span class="intel-name">${intel.name}</span>
+              <span class="intel-acc" style="color:${accColor(intel.accuracy)}">確度: ${intel.accuracy}%</span>
+            </div>
+            <div class="intel-content">${intel.content}</div>
+            <div class="intel-meta">情報源: ${intel.fromEnemy} ／ ${intel.itemUsed}</div>
+          </div>`).join('')}
+    </div>
+    <div class="action-bar">
+      <button class="btn btn-secondary" onclick="S.phase='map';render()">← マップへ戻る</button>
+      <button class="btn btn-primary" onclick="S.phase='attack_plan';render()">⚔️ 攻撃作戦へ</button>
+    </div>
+  </div>`;
+}
+
+function renderAttackPlan() {
+  const ownWall = S.intel.find(i => i.id === 'own_wall');
+  const showWarning = ownWall && ownWall.accuracy >= 55;
+  return `<div class="screen">
+    <div class="header">
+      <h2>⚔️ 攻撃作戦立案</h2>
+      <div class="resources"><span class="resource">💰 ${S.player.gold}G</span></div>
+    </div>
+    ${S.intel.length > 0 ? `
+      <div class="intel-summary">
+        <div class="section-title">📋 収集情報 (${S.intel.length}件)</div>
+        ${S.intel.map(intel => `
+          <div class="intel-mini ${intel.category === 'own' ? 'own' : ''}">
+            <span>${intel.category === 'own' ? '⚠️' : '📌'} ${intel.name}</span>
+            <span class="acc-badge" style="color:${accColor(intel.accuracy)}">確度 ${intel.accuracy}%</span>
+          </div>`).join('')}
+      </div>` : '<div class="card"><p class="note">情報なしで攻撃します。成功率は低くなります。</p></div>'}
+    ${showWarning ? `
+      <div class="warning-box">
+        <h3>⚠️ 自陣の弱点情報あり</h3>
+        <p style="margin:8px 0">${ownWall.content}</p>
+        <p style="font-size:13px;color:#aaa">攻撃中に敵が反撃する可能性があります。対策を取りますか？</p>
+        <label class="checkbox-label">
+          <input type="checkbox" id="reinforce" onchange="toggleReinforce(this)">
+          北の外壁を強化する（200G消費）${S.player.gold < 200 ? '<span style="color:var(--red)"> — ゴールド不足</span>' : ''}
+        </label>
+      </div>` : ''}
+    <div class="section-title">作戦を選択してください：</div>
+    <div class="strategy-grid">
+      ${STRATEGIES.map(s => {
+        const rel = S.intel.filter(i => s.relevantIntel.includes(i.id));
+        const avg = rel.length > 0 ? Math.round(rel.reduce((a, i) => a + i.accuracy, 0) / rel.length) : 0;
+        return `<div class="strategy-card" onclick="doAttack('${s.id}')">
+          <div class="strategy-icon">${s.icon}</div>
+          <div class="strategy-name">${s.name}</div>
+          <div class="strategy-desc">${s.desc}</div>
+          <div class="strategy-intel">関連情報: ${rel.length > 0 ? rel.map(i => `${i.name}`).join('、') : 'なし'}</div>
+          ${rel.length > 0 ? `<div class="strategy-acc">情報確度平均: <strong style="color:${accColor(avg)}">${avg}%</strong></div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <button class="btn btn-outline" onclick="S.phase='map';render()">← マップへ戻る</button>
+  </div>`;
+}
+
+function renderResult() {
+  const r = S.attackResult;
+  if (r.outcome === 'player_dead') {
+    return `<div class="screen center-screen">
+      <div class="result-box" style="border-color:var(--red)">
+        <div style="font-size:4rem">💀</div>
+        <h1 style="color:var(--red)">戦闘で倒れた…</h1>
+        <p class="result-desc">敵との戦闘で体力が尽きてしまった。</p>
+        <button class="btn btn-primary" onclick="initState();render()">もう一度挑戦</button>
+      </div>
+    </div>`;
+  }
+  const icons   = {perfect:'🏆', victory:'🎖️', pyrrhic:'⚠️', defeat:'❌', catastrophe:'💀'};
+  const colors  = {perfect:'#3fb950', victory:'#58a6ff', pyrrhic:'#d29922', defeat:'#f85149', catastrophe:'#8b0000'};
+  return `<div class="screen center-screen">
+    <div class="result-box" style="border-color:${colors[r.outcome]}">
+      <div style="font-size:4rem">${icons[r.outcome]}</div>
+      <h1 style="color:${colors[r.outcome]}">${r.title}</h1>
+      <div class="score-display">
+        <div class="score-bar-wrap">
+          <div class="score-bar-fill" style="width:${r.score}%;background:${colors[r.outcome]}"></div>
+        </div>
+        <span>作戦成功度: <strong>${r.score}%</strong></span>
+      </div>
+      <p class="result-desc">${r.desc}</p>
+      <div class="result-details">
+        <strong>作戦詳細</strong><br>
+        使用作戦: ${r.strategy?.name || 'N/A'}<br>
+        収集情報数: ${S.intel.length}件<br>
+        残金: ${S.player.gold}G<br>
+        残HP: ${S.player.hp}/${S.player.maxHp}
+      </div>
+      <button class="btn btn-primary" onclick="initState();render()">もう一度プレイ</button>
+    </div>
+  </div>`;
+}
+
+// =====================
+// HELPERS
+// =====================
+
+function toggleReinforce(cb) {
+  if (cb.checked) {
+    if (S.player.gold < 200) { cb.checked = false; return; }
+    S.player.gold -= 200;
+    S.northWallReinforced = true;
+  } else {
+    S.player.gold += 200;
+    S.northWallReinforced = false;
+  }
+  const res = document.querySelector('.resources');
+  if (res) res.innerHTML = `<span class="resource">💰 ${S.player.gold}G</span>`;
+}
+
+// =====================
+// BOOT
+// =====================
+
+initState();
+render();
+</script>
+</body>
+</html>

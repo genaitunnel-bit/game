@@ -1,0 +1,17 @@
+{
+  "name": "secret-hearts",
+  "version": "1.0.0",
+  "description": "情報戦略 ～Secret Hearts～",
+  "main": "index.html",
+  "scripts": {
+    "serve": "npx serve . -p 3000 --no-clipboard",
+    "start": "npx serve . -p 3000 --no-clipboard"
+  },
+  "window": {
+    "title": "情報戦略 ～Secret Hearts～",
+    "width": 1280,
+    "height": 720,
+    "min_width": 1024,
+    "min_height": 640
+  }
+}

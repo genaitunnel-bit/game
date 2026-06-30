@@ -1,0 +1,106 @@
+/* ============ BATTLE SCREEN ============ */
+#scene-battle {
+  position: fixed; inset: 0; z-index: 15;
+  display: flex; flex-direction: column;
+  background: #000;
+}
+
+/* FE-style: Canvas takes upper 65%, UI bottom 35% */
+#battle-canvas {
+  display: block !important;
+  width: 100%; flex: 1;
+}
+
+.battle-ui {
+  flex-shrink: 0;
+  background: rgba(8,4,20,.95);
+  border-top: 1px solid rgba(255,255,255,.1);
+  padding: 12px 20px; display: flex; flex-direction: column; gap: 10px;
+}
+
+/* Character name plates */
+.battle-nameplates {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.nameplate {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.nameplate.enemy { align-items: flex-end; }
+.np-name  { font-size: 16px; font-weight: 700; }
+.np-title { font-size: 11px; color: var(--dim); }
+.np-hp-wrap { display: flex; align-items: center; gap: 6px; }
+.np-hp-bar  { width: 120px; height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); overflow: hidden; }
+.np-hp-fill { height: 100%; border-radius: 4px; transition: width .5s; }
+.np-hp-num  { font-size: 12px; font-weight: 700; min-width: 50px; }
+.nameplate.player .np-hp-num { text-align: left; }
+.nameplate.enemy  .np-hp-num { text-align: right; }
+
+/* VS separator */
+.battle-vs {
+  font-size: 20px; font-weight: 900;
+  background: linear-gradient(135deg, var(--red), var(--pink));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* Battle log */
+.battle-log {
+  background: rgba(0,0,0,.4); border-radius: 10px;
+  padding: 8px 14px; font-size: 13px; line-height: 1.7;
+  border: 1px solid rgba(255,255,255,.06); min-height: 48px;
+  color: var(--text);
+}
+.battle-log .log-line { animation: slideIn .3s; }
+
+/* Action buttons */
+.battle-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.battle-actions .btn { flex: 1; min-width: 100px; }
+
+/* Pre-battle setup overlay */
+.prebattle-overlay {
+  position: fixed; inset: 0; z-index: 14;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.8); backdrop-filter: blur(4px);
+}
+.prebattle-box {
+  background: linear-gradient(160deg,#1a0a30,#0e0618);
+  border: 1px solid var(--border); border-radius: 24px; padding: 36px;
+  max-width: 680px; width: 90%; text-align: center;
+}
+.prebattle-combatants {
+  display: flex; align-items: center; justify-content: center; gap: 24px;
+  margin: 24px 0;
+}
+.combatant-card {
+  flex: 1; max-width: 220px; padding: 18px; border-radius: 16px;
+  background: var(--surface2); border: 1px solid var(--border); text-align: center;
+}
+.combatant-card.player { border-color: var(--teal); }
+.combatant-card.enemy  { border-color: var(--red);  }
+.cc-emoji   { font-size: 52px; margin-bottom: 8px; }
+.cc-name    { font-weight: 700; font-size: 16px; margin-bottom: 10px; }
+.cc-stats   { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 12px; text-align: left; }
+.cc-stats .stat-row { display: flex; justify-content: space-between; }
+.cc-stats .sv { font-weight: 700; color: var(--gold); }
+.vs-badge   { font-size: 28px; font-weight: 900; color: var(--red); flex-shrink: 0; }
+
+.prebattle-intel {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px; text-align: left;
+  font-size: 13px; margin-bottom: 20px; line-height: 1.7;
+}
+.weakness-highlight { color: var(--gold); font-weight: 700; }
+
+/* Post-capture prompt */
+.capture-prompt {
+  position: fixed; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,.85); backdrop-filter: blur(4px);
+}
+.capture-box {
+  background: linear-gradient(160deg,#1a0a30,#0e0618);
+  border: 2px solid var(--green); border-radius: 24px; padding: 40px;
+  text-align: center; max-width: 480px; width: 90%;
+  animation: popIn .5s cubic-bezier(.175,.885,.32,1.275);
+}
+.capture-emoji { font-size: 72px; margin-bottom: 14px; }
+.capture-name  { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
