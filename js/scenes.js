@@ -436,9 +436,26 @@ const Scenes = (() => {
           onCapture(locationId, angel.id, false /* don't call BattleScene.stop */);
         } else {
           G.player.baseHp = Math.max(0, G.player.baseHp - 40);
-          G.phase = 'map';
-          setSystemDlg('敗北', '拠点が突破された……撤退する。', 'var(--red)');
-          render();
+          // 敗北結果画面を表示してからマップへ
+          document.getElementById('root').innerHTML = `
+          <div style="position:fixed;inset:0;background:rgba(10,4,25,0.96);z-index:20;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px">
+            <div style="font-size:52px">💀</div>
+            <h2 style="color:#FF5E7A;font-size:28px;margin:0">拠点陥落</h2>
+            <p style="color:#aaa;font-size:15px;text-align:center;max-width:360px">
+              天使の波状攻撃を防ぎきれなかった。<br>
+              自陣HP: <span style="color:#FF5E7A">${G.player.baseHp}/${G.player.baseMaxHp}</span>
+            </p>
+            <button id="btn-defeat-back" style="
+              padding:12px 32px;background:linear-gradient(135deg,#7B5EA7,#C89FFF);
+              color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer">
+              マップへ戻る
+            </button>
+          </div>`;
+          document.getElementById('btn-defeat-back').addEventListener('click', () => {
+            setSystemDlg('敗北', '拠点が突破された……態勢を立て直せ。', 'var(--red)');
+            G.phase = 'map';
+            render();
+          });
         }
       },
     });
@@ -900,7 +917,10 @@ function render() {
       case 'story':         Scenes.renderStory();       break;
       case 'map':           Scenes.renderMap();          break;
       case 'prebattle':     Scenes.renderPreBattle(G._preBattleLoc); break;
-      case 'battle':        /* handled in App.startBattle */ break;
+      case 'battle':
+        document.getElementById('root').innerHTML =
+          '<div style="position:fixed;inset:0;background:#0a1520;z-index:5"></div>';
+        break;
       case 'capture':       Scenes.renderCapture();     break;
       case 'interrogation': Scenes.renderInterrogation(); break;
       case 'intelResult':   Scenes.renderIntelResult(); break;
