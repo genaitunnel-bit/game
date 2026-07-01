@@ -19,16 +19,21 @@
   image-rendering: pixelated;
 }
 
-/* ── HUDバー ── */
+/* ── HUDバー（画面下部に固定）── */
 #td-hud {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  background: rgba(0,0,0,0.85);
-  border-top: 1px solid rgba(255,255,255,0.08);
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(8,4,20,0.97);
+  border-top: 1px solid rgba(200,159,255,0.2);
   flex-wrap: wrap;
-  min-height: 48px;
+  min-height: 52px;
 }
 
 /* ウェーブタイマーバー */

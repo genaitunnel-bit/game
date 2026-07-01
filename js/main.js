@@ -86,7 +86,7 @@ window.addEventListener('resize', () => {
   const canvas = document.getElementById('battle-canvas');
   if (canvas && canvas.style.display !== 'none') {
     canvas.width  = window.innerWidth;
-    canvas.height = Math.floor(window.innerHeight * 0.62);
+    canvas.height = Math.max(200, window.innerHeight - 60);
   }
 });
 

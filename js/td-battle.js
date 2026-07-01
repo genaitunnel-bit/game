@@ -86,7 +86,7 @@ const TDBattle = (() => {
     _cb     = callbacks || {};
 
     _canvas.width  = window.innerWidth;
-    _canvas.height = Math.floor(window.innerHeight * 0.62);
+    _canvas.height = Math.max(200, window.innerHeight - 60);
     _canvas.style.display = 'block';
     _canvas.style.cursor  = 'crosshair';
 

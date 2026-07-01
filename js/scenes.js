@@ -300,7 +300,7 @@ const Scenes = (() => {
     canvas.style.top    = '0';
     canvas.style.left   = '0';
     canvas.style.width  = '100vw';
-    canvas.style.height = '62vh';
+    canvas.style.height = 'calc(100vh - 60px)';
     canvas.style.zIndex = '15';
 
     // Build battle items for use during fight
