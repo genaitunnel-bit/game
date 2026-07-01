@@ -21,7 +21,7 @@ const ANGELS = [
     title: '偵察天使',
     rank: 1,
     /* 戦闘ステータス */
-    hp: 38, atk: 11, def: 5, spd: 9,
+    hp: 38, atk: 11, def: 5, spd: 9, mov: 4, rng: 1,
     resist: 22, captureAt: 45,
     gold: 40,
     /* 見た目 */
@@ -97,7 +97,7 @@ const ANGELS = [
     name: 'アイリス',
     title: '天使騎士',
     rank: 2,
-    hp: 68, atk: 16, def: 9, spd: 7,
+    hp: 68, atk: 16, def: 9, spd: 7, mov: 4, rng: 1,
     resist: 42, captureAt: 35,
     gold: 80,
     color:    '#C89FFF',
@@ -167,7 +167,7 @@ const ANGELS = [
     name: 'ミカ',
     title: '天使副隊長',
     rank: 3,
-    hp: 115, atk: 24, def: 16, spd: 6,
+    hp: 115, atk: 24, def: 16, spd: 6, mov: 3, rng: 1,
     resist: 68, captureAt: 25,
     gold: 160,
     color:    '#FF9E6B',
@@ -238,7 +238,7 @@ const ANGELS = [
     name: 'クロノス',
     title: '大天使長',
     rank: 4,
-    hp: 165, atk: 32, def: 24, spd: 5,
+    hp: 165, atk: 32, def: 24, spd: 5, mov: 3, rng: 2,
     resist: 88, captureAt: 12,
     gold: 320,
     color:    '#E8E0F8',
@@ -375,6 +375,13 @@ const LOCATIONS = [
     desc:'最前線の見張り台。偵察天使が常駐している。',
     reqIntel:[], defense:25, angelId:'sera',
     startGold: 220, baseHp: 20,
+    enemyLayout: [
+      {type:'grunt',  c:5,r:1},{type:'grunt',  c:5,r:5},
+      {type:'archer', c:6,r:3},
+      {type:'grunt',  c:7,r:0},{type:'grunt',  c:7,r:6},
+      {type:'archer', c:7,r:2},{type:'grunt',  c:7,r:4},
+      {type:'grunt',  c:8,r:1},{type:'elite',  c:8,r:5},
+    ],
     waves: [
       { prepTime:35, enemies:[
           { type:'grunt', count:6, spawnInterval:1.6 }
@@ -404,6 +411,13 @@ const LOCATIONS = [
     desc:'天使騎士が駐留する前線。ここを落とせば防衛線が崩れる。',
     reqIntel:['front_base_loc'], defense:55, angelId:'iris',
     startGold: 260, baseHp: 18,
+    enemyLayout: [
+      {type:'grunt',  c:4,r:0},{type:'grunt',  c:4,r:6},
+      {type:'elite',  c:5,r:2},{type:'elite',  c:5,r:4},
+      {type:'archer', c:6,r:1},{type:'archer', c:6,r:5},
+      {type:'elite',  c:7,r:3},
+      {type:'heavy',  c:8,r:0},{type:'heavy',  c:8,r:6},
+    ],
     waves: [
       { prepTime:35, enemies:[
           { type:'grunt', count:8, spawnInterval:1.4 },
@@ -435,6 +449,13 @@ const LOCATIONS = [
     desc:'天使軍の補給路の要。制圧すれば敵が弱体化する。',
     reqIntel:['supply_base_loc'], defense:45, angelId:'iris',
     startGold: 240, baseHp: 18,
+    enemyLayout: [
+      {type:'grunt',  c:4,r:2},{type:'grunt',  c:4,r:4},
+      {type:'heavy',  c:5,r:0},{type:'heavy',  c:5,r:6},
+      {type:'grunt',  c:6,r:3},
+      {type:'archer', c:7,r:1},{type:'archer', c:7,r:5},
+      {type:'elite',  c:8,r:2},{type:'heavy',  c:8,r:4},
+    ],
     waves: [
       { prepTime:35, enemies:[
           { type:'grunt', count:7, spawnInterval:1.3 },
@@ -465,6 +486,13 @@ const LOCATIONS = [
     desc:'副隊長ミカが指揮を執る難攻不落の要塞。',
     reqIntel:['hq_location'], defense:80, angelId:'mika',
     startGold: 300, baseHp: 16,
+    enemyLayout: [
+      {type:'elite',  c:3,r:1},{type:'elite',  c:3,r:5},
+      {type:'heavy',  c:4,r:3},
+      {type:'elite',  c:5,r:0},{type:'elite',  c:5,r:6},
+      {type:'archer', c:6,r:2},{type:'archer', c:6,r:4},
+      {type:'heavy',  c:7,r:1},{type:'heavy',  c:7,r:5},
+    ],
     waves: [
       { prepTime:40, enemies:[
           { type:'elite', count:6, spawnInterval:1.2 },
@@ -500,6 +528,13 @@ const LOCATIONS = [
     desc:'クロノスの最後の砦。人類の命運はここで決まる。',
     reqIntel:['final_gate','kronos_secret'], defense:100, angelId:'kronos',
     startGold: 350, baseHp: 15,
+    enemyLayout: [
+      {type:'heavy',  c:3,r:0},{type:'heavy',  c:3,r:6},
+      {type:'elite',  c:4,r:2},{type:'elite',  c:4,r:4},
+      {type:'archer', c:5,r:1},{type:'archer', c:5,r:5},
+      {type:'heavy',  c:6,r:3},
+      {type:'elite',  c:7,r:0},{type:'elite',  c:7,r:6},
+    ],
     waves: [
       { prepTime:45, enemies:[
           { type:'heavy', count:4, spawnInterval:2.2 },
@@ -555,8 +590,9 @@ const METHODS = [
 
 /* -------- プレイヤー初期ソルジャー -------- */
 const PLAYER_UNIT = {
-  name: '人類抵抗軍兵士',
+  name: '人類抵抗軍指揮官',
   hp: 60, atk: 14, def: 8, spd: 7,
+  mov: 4, rng: 1,
   emoji: '🪖',
 };
 

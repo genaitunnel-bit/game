@@ -221,19 +221,43 @@ const Scenes = (() => {
   }
 
   /* ======================================================
-     戦闘前ブリーフィング
+     戦闘前ブリーフィング（ファイアーエムブレム式・仲間選択）
      ====================================================== */
   function renderPreBattle(locationId) {
     const loc   = getLocation(locationId);
     const angel = getAngel(loc.angelId);
-    const wm    = getWeaknessMulti(angel.id);
-    const hasWk = hasIntel(angel.weaknessId);
+    const recruitedAllies = G.allies
+      .filter(a => a.recruited)
+      .map(a => getAngel(a.id))
+      .filter(Boolean);
+    const equipIds = [...new Set(G.inventory.filter(id => {
+      const d = getItemDef(id);
+      return d && d.cat === 'equipment' && !['gold_bonus','base_hp'].includes(d.effect);
+    }))];
+
+    const party = { allyIds: [], itemIds: [] };
+
+    function allyCardHtml(a) {
+      return `
+      <button class="btn btn-ghost ally-sel-btn" data-ally-id="${a.id}" style="
+        display:flex;align-items:center;gap:10px;padding:8px 14px;min-width:190px;
+        border:1px solid rgba(200,159,255,0.25);border-radius:10px;text-align:left">
+        <span style="font-size:22px">${a.emoji}</span>
+        <span>
+          <strong style="color:${a.color}">${a.name}</strong><br>
+          <span style="font-size:11px;color:var(--dim)">HP:${a.hp} 攻:${a.atk} 防:${a.def} 速:${a.spd}</span>
+        </span>
+      </button>`;
+    }
 
     document.getElementById('root').innerHTML = `
     ${statusBar()}
     <div class="prebattle-overlay">
-      <div class="prebattle-box">
+      <div class="prebattle-box" style="max-width:820px">
         <h2>⚔️ 出撃ブリーフィング — ${loc.name}</h2>
+        <div style="font-size:13px;color:var(--dim);text-align:center;margin-bottom:14px">
+          ターン制シミュレーション。指揮官を守りつつ、目標天使のHPを30%以下にして隣接して捕縛せよ。
+        </div>
 
         <div class="prebattle-combatants">
           <div class="combatant-card player">
@@ -243,7 +267,7 @@ const Scenes = (() => {
               <div class="stat-row"><span>HP</span><span class="sv">${PLAYER_UNIT.hp}</span></div>
               <div class="stat-row"><span>攻撃</span><span class="sv">${PLAYER_UNIT.atk}</span></div>
               <div class="stat-row"><span>防御</span><span class="sv">${PLAYER_UNIT.def}</span></div>
-              <div class="stat-row"><span>速度</span><span class="sv">${PLAYER_UNIT.spd}</span></div>
+              <div class="stat-row"><span>移動</span><span class="sv">${PLAYER_UNIT.mov}</span></div>
             </div>
           </div>
           <div class="vs-badge">VS</div>
@@ -254,54 +278,100 @@ const Scenes = (() => {
               <div class="stat-row"><span>HP</span><span class="sv">${angel.hp}</span></div>
               <div class="stat-row"><span>攻撃</span><span class="sv">${angel.atk}</span></div>
               <div class="stat-row"><span>防御</span><span class="sv">${angel.def}</span></div>
-              <div class="stat-row"><span>速度</span><span class="sv">${angel.spd}</span></div>
+              <div class="stat-row"><span>護衛</span><span class="sv">9体</span></div>
             </div>
           </div>
         </div>
 
-        <div class="prebattle-intel">
-          ${hasWk
-            ? `<span class="weakness-highlight">⚡ 弱点情報あり: ${angel.weaknessName}</span><br>
-               <span class="text-dim">弱点攻撃でダメージ×${wm.toFixed(1)}</span>`
-            : `<span class="text-dim">弱点情報なし。尋問で情報を集めると有利になる。</span>`}
-        </div>
+        ${recruitedAllies.length > 0 ? `
+        <div style="margin:14px 0">
+          <div class="section-label">✨ 仲間を選ぶ（最大3人）</div>
+          <div id="ally-select" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+            ${recruitedAllies.map(allyCardHtml).join('')}
+          </div>
+        </div>` : `<div style="color:var(--dim);font-size:13px;margin:10px 0;text-align:center">
+          仲間はまだいない。天使を尋問して招集しよう。
+        </div>`}
 
-        <div class="row" style="justify-content:center;gap:14px">
-          ${hasWk ? `<button class="btn btn-gold" id="btn-weak-battle">⚡ 弱点を突いて戦闘</button>` : ''}
-          <button class="btn btn-lavender" id="btn-normal-battle">⚔️ 通常戦闘</button>
+        ${equipIds.length > 0 ? `
+        <div style="margin:14px 0">
+          <div class="section-label">🎒 装備アイテムを持っていく（複数可）</div>
+          <div id="item-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+            ${equipIds.map(id => {
+              const d = getItemDef(id);
+              return `<button class="btn btn-ghost item-sel-btn" data-item-id="${id}" style="
+                padding:6px 12px;border:1px solid rgba(100,220,100,0.25);border-radius:8px;text-align:left">
+                ${d.icon} <strong>${d.name}</strong>
+                <span style="font-size:11px;color:var(--dim);display:block">${d.desc}</span>
+              </button>`;
+            }).join('')}
+          </div>
+        </div>` : ''}
+
+        <div class="row" style="justify-content:center;gap:14px;margin-top:18px">
+          <button class="btn btn-lavender btn-lg" id="btn-fe-sortie">⚔️ 出撃！（仲間 0人）</button>
           <button class="btn btn-ghost" id="btn-cancel-battle">← キャンセル</button>
         </div>
       </div>
     </div>`;
 
-    if (hasWk) document.getElementById('btn-weak-battle').addEventListener('click', () => App.startBattle(locationId, true));
-    document.getElementById('btn-normal-battle').addEventListener('click', () => App.startBattle(locationId, false));
+    // 仲間ボタン
+    document.getElementById('ally-select')?.querySelectorAll('.ally-sel-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id  = btn.dataset.allyId;
+        const idx = party.allyIds.indexOf(id);
+        if (idx >= 0) {
+          party.allyIds.splice(idx, 1);
+          btn.style.background = '';
+          btn.style.borderColor = 'rgba(200,159,255,0.25)';
+        } else if (party.allyIds.length < 3) {
+          party.allyIds.push(id);
+          btn.style.background = 'rgba(200,159,255,0.2)';
+          btn.style.borderColor = 'rgba(200,159,255,0.7)';
+        }
+        const sortieBtn = document.getElementById('btn-fe-sortie');
+        if (sortieBtn) sortieBtn.textContent = `⚔️ 出撃！（仲間 ${party.allyIds.length}人）`;
+      });
+    });
+
+    // 装備アイテムボタン
+    document.getElementById('item-select')?.querySelectorAll('.item-sel-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id  = btn.dataset.itemId;
+        const idx = party.itemIds.indexOf(id);
+        if (idx >= 0) {
+          party.itemIds.splice(idx, 1);
+          btn.style.background = '';
+          btn.style.borderColor = 'rgba(100,220,100,0.25)';
+        } else {
+          party.itemIds.push(id);
+          btn.style.background = 'rgba(100,220,100,0.15)';
+          btn.style.borderColor = 'rgba(100,220,100,0.7)';
+        }
+      });
+    });
+
+    document.getElementById('btn-fe-sortie').addEventListener('click', () => App.startBattle(locationId, party));
     document.getElementById('btn-cancel-battle').addEventListener('click', () => { G.phase = 'map'; render(); });
   }
 
   /* ======================================================
-     タワーディフェンス戦闘画面
+     ファイアーエムブレム式ターン制戦闘画面
      ====================================================== */
 
-  // HUDをbodyから削除するヘルパー（#rootとは別の重ね合わせコンテキストにあるため）
-  function _removeBattleHUD() {
-    const hud = document.getElementById('td-hud');
-    if (hud) hud.remove();
+  function _removeFEHUD() {
+    const el = document.getElementById('fe-hud');
+    if (el) el.remove();
   }
 
-  function renderBattle(locationId, useWeakness) {
-    const loc      = getLocation(locationId);
-    const angel    = getAngel(loc.angelId);
-    const intelIds = G.intel.filter(i=>i.isTrue).map(i=>i.id);
-
-    const intelEffects = {
-      bossWeakness:  useWeakness && hasIntel(angel.weaknessId),
-      cheaperTowers: hasIntel('supply_base_loc') && G.intel.find(i=>i.id==='supply_base_loc')?.isTrue,
-    };
+  function renderBattle(locationId, partyConfig) {
+    const loc   = getLocation(locationId);
+    const angel = getAngel(loc.angelId);
+    partyConfig = partyConfig || { allyIds: [], itemIds: [] };
 
     recalcDropBoost();
 
-    // ── キャンバスを準備（前の戦闘でDOMから削除されている場合は再作成）──
+    // キャンバスを準備（前の戦闘でDOMから削除されている場合は再作成）
     let canvas = document.getElementById('battle-canvas');
     if (!canvas) {
       canvas = document.createElement('canvas');
@@ -309,184 +379,184 @@ const Scenes = (() => {
       document.body.appendChild(canvas);
     }
     canvas.style.cssText = [
-      'position:fixed', 'top:0', 'left:0', 'width:100vw',
-      'height:calc(100vh - 60px)', 'z-index:15', 'display:block', 'cursor:crosshair',
+      'position:fixed','top:0','left:0','width:100vw',
+      'height:calc(100vh - 60px)','z-index:15','display:block','cursor:crosshair',
     ].join(';') + ';';
-    canvas.width  = window.innerWidth;
-    canvas.height = Math.max(200, window.innerHeight - 60);
 
-    // ── root は背景のみ（黒）──
     document.getElementById('root').innerHTML =
       '<div style="position:fixed;inset:0;background:#0a1520;z-index:5"></div>';
 
-    // ── 既存HUDを削除してから作り直す ──
-    _removeBattleHUD();
+    _removeFEHUD();
 
-    const battleItems   = G.inventory.filter(id => { const d = getItemDef(id); return d && d.cat === 'battle'; });
-    const itemSlotsHTML = battleItems.slice(0, 4).map(id => {
-      const d     = getItemDef(id);
-      const count = G.inventory.filter(x => x === id).length;
-      return `<div class="td-item-slot" data-item-id="${id}" title="${d.name}: ${d.desc}">${d.icon}<span class="slot-count">${count}</span></div>`;
-    }).join('');
+    // 仲間ユニット組み立て
+    const alliedAngels = (partyConfig.allyIds || [])
+      .map(id => getAngel(id)).filter(Boolean)
+      .map(a => ({
+        id:a.id, name:a.name, emoji:a.emoji, color:a.color,
+        hp:a.hp, atk:a.atk, def:a.def, spd:a.spd,
+        mov:a.mov||4, rng:a.rng||1,
+      }));
 
-    const towerDefs    = TDBattle.getTowerDefs();
-    const towerBtnsHTML = Object.entries(towerDefs).map(([type, def]) =>
-      `<button class="td-tower-btn" data-type="${type}">
-        <span class="tw-icon">${def.icon}</span>
-        <span class="tw-name">${def.name}</span>
-        <span class="tw-cost">${def.cost}G</span>
-      </button>`
-    ).join('');
+    // 装備効果組み立て
+    const equipEffects = [];
+    for (const itemId of (partyConfig.itemIds || [])) {
+      const d = getItemDef(itemId);
+      if (d && d.effect) equipEffects.push({ type: d.effect, value: d.value });
+    }
 
-    // ── HUDをbody直下に追加（#rootのz-indexの影響を受けないようにする）──
+    // FE HUD（body直下に追加）
     const hudEl = document.createElement('div');
-    hudEl.id = 'td-hud';
-    // CSS未ロード時のフォールバックとして重要なスタイルをインラインでも指定
+    hudEl.id = 'fe-hud';
     hudEl.style.cssText = [
-      'position:fixed', 'bottom:0', 'left:0', 'right:0', 'z-index:100',
-      'display:flex', 'align-items:center', 'gap:8px', 'padding:6px 10px',
-      'background:rgba(8,4,20,0.97)', 'border-top:1px solid rgba(200,159,255,0.25)',
-      'flex-wrap:wrap', 'min-height:56px',
+      'position:fixed','bottom:0','left:0','right:0','z-index:100',
+      'display:flex','align-items:center','gap:10px','padding:8px 12px',
+      'background:rgba(8,4,20,0.97)','border-top:1px solid rgba(200,159,255,0.25)',
+      'flex-wrap:wrap','min-height:56px','font-size:13px',
     ].join(';') + ';';
     hudEl.innerHTML = `
-      <div id="td-wave-bar-wrap">
-        <div id="td-wave-label">WAVE 1 / ${loc.waves.length}</div>
-        <div id="td-wave-bar-bg"><div id="td-wave-bar" style="width:100%"></div></div>
+      <div id="fe-phase" style="padding:4px 10px;background:rgba(60,120,255,0.2);border-radius:6px;font-weight:bold;color:#80B0FF;white-space:nowrap">
+        プレイヤーフェーズ　ターン 1
       </div>
-      <div class="td-stat"><span class="label">GOLD</span><span id="td-gold-val">--G</span></div>
-      <div class="td-stat"><span class="label">拠点HP</span><span id="td-hp-val">--</span></div>
-      <div class="td-stat"><span class="label">撃破</span><span id="td-kill-val">0</span></div>
-      <div id="td-phase-label" class="prep">準備中</div>
-      <div id="td-tower-panel">${towerBtnsHTML}</div>
-      <div id="td-item-bar">${itemSlotsHTML || '<span style="color:#555;font-size:12px">アイテムなし</span>'}</div>
-      <button id="td-early-btn">▶ 早期開始</button>
-      <button id="td-retreat-btn">撤退</button>`;
+      <div id="fe-unit-info" style="flex:1;min-width:160px;color:#CCC">
+        <span style="color:var(--dim)">ユニットを選択してください</span>
+      </div>
+      <div id="fe-action-btns" style="display:flex;gap:6px"></div>
+      <div id="fe-item-btns"   style="display:flex;gap:6px"></div>
+      <div id="fe-enemy-count" style="color:var(--dim);white-space:nowrap">敵: 10体</div>
+      <button id="fe-retreat-btn" style="padding:5px 12px;background:rgba(200,60,60,0.3);border:1px solid rgba(200,60,60,0.5);color:#FF9090;border-radius:6px;cursor:pointer">撤退</button>`;
     document.body.appendChild(hudEl);
 
-    // ── ボタンバインド ──
-    hudEl.querySelector('#td-tower-panel').querySelectorAll('.td-tower-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        TDBattle.selectTowerType(btn.dataset.type);
-        hudEl.querySelectorAll('.td-tower-btn').forEach(b =>
-          b.classList.toggle('selected',
-            b.dataset.type === btn.dataset.type &&
-            TDBattle.getState() &&
-            TDBattle.getState().selectedType === btn.dataset.type)
-        );
-      });
-    });
-
-    hudEl.querySelector('#td-item-bar').querySelectorAll('.td-item-slot').forEach(slot => {
-      slot.addEventListener('click', () => {
-        const id = slot.dataset.itemId;
-        if (removeItemFromInventory(id)) { TDBattle.useBattleItem(id); slot.remove(); }
-      });
-    });
-
-    hudEl.querySelector('#td-early-btn').addEventListener('click', () => TDBattle.startWaveEarly());
-
-    hudEl.querySelector('#td-retreat-btn').addEventListener('click', () => {
-      TDBattle.stopBattle();
-      _removeBattleHUD();
-      // キャンバスをDOMから完全に削除（display:noneより確実）
+    hudEl.querySelector('#fe-retreat-btn').addEventListener('click', () => {
+      FEBattle.stopBattle();
+      _removeFEHUD();
       document.getElementById('battle-canvas')?.remove();
       G.phase = 'map';
       setSystemDlg('システム', '撤退した。また準備を整えて挑もう。', 'var(--gold)');
       render();
     });
 
-    // ── 装備効果を適用 ──
-    for (const eff of G.equippedEffects) {
-      TDBattle.applyEquipmentBonus(eff);
-    }
+    // 戦闘アイテムボタン
+    const battleItems    = G.inventory.filter(id => { const d = getItemDef(id); return d && d.cat === 'battle'; });
+    const uniqueBattleIds = [...new Set(battleItems)];
+    const itemBtnsEl     = hudEl.querySelector('#fe-item-btns');
+    uniqueBattleIds.forEach(id => {
+      const d   = getItemDef(id);
+      const cnt = battleItems.filter(x => x === id).length;
+      const btn = document.createElement('button');
+      btn.textContent = `${d.icon} ${d.name} ×${cnt}`;
+      btn.style.cssText = 'padding:4px 10px;background:rgba(255,215,0,0.15);border:1px solid rgba(255,215,0,0.3);border-radius:6px;color:#FFD700;cursor:pointer;font-size:12px';
+      btn.addEventListener('click', () => {
+        if (!removeItemFromInventory(id)) return;
+        FEBattle.useBattleItem(id);
+        const rem = G.inventory.filter(x => x === id).length;
+        if (rem <= 0) btn.remove();
+        else btn.textContent = `${d.icon} ${d.name} ×${rem}`;
+      });
+      itemBtnsEl.appendChild(btn);
+    });
 
-    // ── TD エンジン起動 ──
-    TDBattle.startBattle(canvas, {
-      locationId:    loc.id,
-      angel:         angel,
-      waves:         loc.waves,
-      startGold:     loc.startGold || 200,
-      baseHp:        loc.baseHp    || 20,
-      intelEffects,
-      dropBoostMult: G.dropBoostMult,
+    // FEBattle 起動
+    FEBattle.startBattle(canvas, {
+      commanderUnit: PLAYER_UNIT,
+      allies:        alliedAngels,
+      equipEffects,
+      enemyLayout:   loc.enemyLayout,
+      angel: {
+        name:angel.name, emoji:angel.emoji, color:angel.color,
+        hp:angel.hp, atk:angel.atk, def:angel.def, spd:angel.spd,
+        mov:angel.mov||3, rng:angel.rng||1,
+      },
     }, {
-      onHUDUpdate: ({ gold, baseHp, baseMaxHp, wave, totalWaves, phase, prepTimer, killed }) => {
-        const goldEl   = document.getElementById('td-gold-val');
-        const hpEl     = document.getElementById('td-hp-val');
-        const killEl   = document.getElementById('td-kill-val');
-        const waveEl   = document.getElementById('td-wave-label');
-        const barEl    = document.getElementById('td-wave-bar');
-        const phaseEl  = document.getElementById('td-phase-label');
-        const earlyBtn = document.getElementById('td-early-btn');
+      onHUDUpdate({ phase, turnNum, units, selected, pendingMove, canCapture, enemyCount }) {
+        const phaseEl  = document.getElementById('fe-phase');
+        const unitInfo = document.getElementById('fe-unit-info');
+        const actionEl = document.getElementById('fe-action-btns');
+        const cntEl    = document.getElementById('fe-enemy-count');
 
-        if (goldEl)  goldEl.textContent = `${gold}G`;
-        if (hpEl)    hpEl.textContent   = `${baseHp}/${baseMaxHp}`;
-        if (killEl)  killEl.textContent = killed;
+        if (phaseEl) {
+          const isPlayer = phase === 'player';
+          phaseEl.style.background = isPlayer ? 'rgba(60,120,255,0.2)' : 'rgba(200,40,40,0.2)';
+          phaseEl.style.color      = isPlayer ? '#80B0FF' : '#FF8080';
+          phaseEl.textContent = `${isPlayer ? '▶ プレイヤー' : '🔴 敵'}フェーズ　ターン ${turnNum}`;
+        }
+        if (cntEl) cntEl.textContent = `敵: ${enemyCount}体`;
 
-        if (phase === 'prep' || phase === 'between') {
-          const maxPrep = loc.waves[Math.min(wave, loc.waves.length - 1)]?.prepTime || 30;
-          const pct     = Math.min(1, prepTimer / maxPrep);
-          if (barEl)   barEl.style.width  = `${pct * 100}%`;
-          if (waveEl)  waveEl.textContent = phase === 'prep'
-            ? `Wave ${wave + 1} / ${totalWaves} 準備中 ${prepTimer}s`
-            : `次のWave まで ${prepTimer}s`;
-          if (phaseEl) { phaseEl.textContent = `準備 ${prepTimer}s`; phaseEl.className = 'prep'; }
-          if (earlyBtn) earlyBtn.disabled = false;
-        } else if (phase === 'wave') {
-          if (waveEl)  waveEl.textContent = `WAVE ${wave} / ${totalWaves} 進行中`;
-          if (barEl)   barEl.style.width  = '100%';
-          if (phaseEl) { phaseEl.textContent = `Wave ${wave} 進行中`; phaseEl.className = 'wave'; }
-          if (earlyBtn) earlyBtn.disabled = true;
+        if (unitInfo && selected) {
+          const st   = FEBattle.getState();
+          const unit = st ? st.units.find(u => u.id === selected && !u.dead) : null;
+          if (unit) {
+            const hpColor = unit.hp/unit.maxHp > 0.5 ? '#4CFF7A' : unit.hp/unit.maxHp > 0.25 ? '#FFD700' : '#FF4444';
+            unitInfo.innerHTML = `
+              <span style="margin-right:8px">${unit.emoji} <strong>${unit.name}</strong></span>
+              <span style="color:${hpColor}">HP ${unit.hp}/${unit.maxHp}</span>
+              <span style="margin-left:8px;color:var(--dim)">攻:${unit.atk} 防:${unit.def} 速:${unit.spd}</span>`;
+          }
+        } else if (unitInfo) {
+          unitInfo.innerHTML = '<span style="color:var(--dim)">ユニットを選択してください</span>';
+        }
+
+        if (actionEl) {
+          actionEl.innerHTML = '';
+          if (phase === 'player') {
+            if (canCapture) {
+              const capBtn = _makeHudBtn('🔗 捕縛！', '#FFD700', 'rgba(255,215,0,0.3)', '#FFD700');
+              capBtn.style.fontWeight = 'bold';
+              capBtn.onclick = () => FEBattle.doCapture();
+              actionEl.appendChild(capBtn);
+            }
+            if (pendingMove) {
+              const waitBtn = _makeHudBtn('待機', '#AAB8FF', 'rgba(100,100,200,0.3)', 'rgba(100,100,200,0.5)');
+              waitBtn.onclick = () => FEBattle.selectWait();
+              actionEl.appendChild(waitBtn);
+            }
+            const endBtn = _makeHudBtn('ターン終了 ▶', '#80FF80', 'rgba(60,200,60,0.2)', 'rgba(60,200,60,0.4)');
+            endBtn.onclick = () => FEBattle.endPlayerTurn();
+            actionEl.appendChild(endBtn);
+          }
         }
       },
 
-      onWaveStart: ({ wave, total }) => {
-        setSystemDlg('ウェーブ', `Wave ${wave} / ${total} 開始！`, 'var(--red)');
-      },
-      onWaveClear: ({ wave, total }) => {
-        setSystemDlg('ウェーブクリア', `Wave ${wave} / ${total} 完了。次のウェーブまで準備を。`, 'var(--green)');
-      },
-      onBossKilled: () => {
-        setSystemDlg('ボス撃破！', `${angel.name}を撃破した！捕縛に成功！`, 'var(--gold)');
+      onBossCaptureable({ boss }) {
+        setSystemDlg('捕縛チャンス！', `${boss.name}のHPが30%以下！隣接して「捕縛」ボタンを押せ！`, 'var(--gold)');
       },
 
-      onBattleEnd: ({ victory }) => {
-        // HUDとキャンバスをDOMから完全に削除
-        _removeBattleHUD();
+      onPlayerPhaseStart({ turn }) {
+        setSystemDlg('フェーズ', `ターン ${turn}　プレイヤーフェーズ`, 'var(--lavender)');
+      },
+
+      onAllActed() {
+        setSystemDlg('行動完了', '全ユニットが行動済み。「ターン終了」ボタンを押してください。', 'var(--green)');
+      },
+
+      onBattleEnd({ victory }) {
+        _removeFEHUD();
         document.getElementById('battle-canvas')?.remove();
 
         if (victory) {
-          const drops = rollDrops(loc, intelIds, G.dropBoostMult);
+          const intelIds = G.intel.filter(i => i.isTrue).map(i => i.id);
+          const drops    = rollDrops(loc, intelIds, G.dropBoostMult);
           applyDrops(drops);
-          for (const id of G.inventory.filter(i => { const d = getItemDef(i); return d && d.cat === 'equipment'; })) {
-            const d = getItemDef(id);
-            if (d.effect && !['gold_bonus', 'base_hp'].includes(d.effect)) {
-              G.equippedEffects.push({ type: d.effect, value: d.value, itemName: d.name });
-            }
-          }
           G._battleDrops = drops;
-          onCapture(locationId, angel.id, false);
+          onCapture(locationId, angel.id);
         } else {
-          G.player.baseHp = Math.max(0, G.player.baseHp - 40);
-          // 敗北画面（z-index:200 でキャンバスより確実に上）
-          const defeatEl = document.createElement('div');
-          defeatEl.id = 'td-defeat-screen';
+          G.player.baseHp = Math.max(0, G.player.baseHp - 30);
+          const defeatEl  = document.createElement('div');
+          defeatEl.id     = 'fe-defeat-screen';
           defeatEl.style.cssText = 'position:fixed;inset:0;background:rgba(10,4,25,0.97);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px';
           defeatEl.innerHTML = `
             <div style="font-size:52px">💀</div>
-            <h2 style="color:#FF5E7A;font-size:28px;margin:0">拠点陥落</h2>
+            <h2 style="color:#FF5E7A;font-size:28px;margin:0">敗北</h2>
             <p style="color:#aaa;font-size:15px;text-align:center;max-width:360px">
-              天使の波状攻撃を防ぎきれなかった。<br>
+              指揮官が倒された……。<br>
               自陣HP: <span style="color:#FF5E7A">${G.player.baseHp}/${G.player.baseMaxHp}</span>
             </p>
-            <button id="btn-defeat-back" style="padding:12px 32px;background:linear-gradient(135deg,#7B5EA7,#C89FFF);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer">
+            <button id="btn-fe-defeat-back" style="padding:12px 32px;background:linear-gradient(135deg,#7B5EA7,#C89FFF);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer">
               マップへ戻る
             </button>`;
           document.body.appendChild(defeatEl);
-
-          document.getElementById('btn-defeat-back').addEventListener('click', () => {
+          document.getElementById('btn-fe-defeat-back').addEventListener('click', () => {
             defeatEl.remove();
-            setSystemDlg('敗北', '拠点が突破された……態勢を立て直せ。', 'var(--red)');
+            setSystemDlg('敗北', '指揮官が倒された……態勢を立て直せ。', 'var(--red)');
             G.phase = 'map';
             render();
           });
@@ -495,11 +565,17 @@ const Scenes = (() => {
     });
   }
 
-  function onCapture(locationId, angelId, doStopBattle) {
+  function _makeHudBtn(label, color, bg, border) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = `padding:5px 12px;background:${bg};border:1px solid ${border};border-radius:6px;color:${color};cursor:pointer;font-size:12px`;
+    return b;
+  }
+
+  function onCapture(locationId, angelId) {
     G.clearedLocs.add(locationId);
     if (!G.prisoners.includes(angelId)) G.prisoners.push(angelId);
     G.turn++;
-    if (doStopBattle !== false) TDBattle.stopBattle();
 
     const angel = getAngel(angelId);
     // Retaliation
@@ -942,7 +1018,7 @@ function render() {
 
     // 戦闘フェーズ以外のとき、残留している battle UI をDOMから完全に削除
     if (G.phase !== 'battle') {
-      ['td-hud', 'td-defeat-screen', 'battle-canvas'].forEach(id => {
+      ['fe-hud', 'fe-defeat-screen', 'battle-canvas'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.remove();
       });

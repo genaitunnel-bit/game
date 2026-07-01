@@ -14,12 +14,11 @@ const App = {
     render();
   },
 
-  /** 戦闘開始 */
-  startBattle(locationId, useWeakness) {
+  /** 戦闘開始 (partyConfig = { allyIds:[], itemIds:[] }) */
+  startBattle(locationId, partyConfig) {
     G.phase = 'battle';
     render();
-    // Canvas描画はScenes.renderBattleが行う
-    Scenes.renderBattle(locationId, useWeakness);
+    Scenes.renderBattle(locationId, partyConfig);
   },
 
   /** 尋問開始 */
