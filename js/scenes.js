@@ -105,7 +105,7 @@ const Scenes = (() => {
       if (G.storyIdx >= STORY_SCENES.length) {
         G.storyIdx = 0;
         G.phase = 'map';
-        setSystemDlg('システム', '作戦を開始せよ。まず敵の哨戒拠点から天使を捕縛し、情報を集めろ。', 'var(--lavender)');
+        setSystemDlg('ルミエル', '……まず「審判の法廷」に行きましょう。セラフィエルが処理命令の鍵を握っています。', '#B8E4FF');
       }
       render();
     };

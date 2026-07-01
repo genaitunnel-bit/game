@@ -22,9 +22,9 @@ function initGameState() {
     /* 収集済み情報 */
     intel: [],              // { id, name, cat, content, accuracy, isTrue, from, method, isNew }
     /* 捕虜リスト（尋問待ち） */
-    prisoners: ['sera'],    // チュートリアル：セラは最初から捕縛済み
+    prisoners: [],
     /* 仲間になった天使 */
-    allies: [],             // { id, trust, recruited }
+    allies: [{ id:'lumiel', trust:100, fear:0, sessions:0, recruited:true, revealedTopics:new Set() }],
     /* 制圧済み拠点 */
     clearedLocs: new Set(),
     /* 報復強度 */
@@ -157,8 +157,8 @@ function applyDrops(drops) {
 
 function recalcDropBoost() {
   let mult = 1.0;
-  if (hasIntel('supply_base_loc') && G.intel.find(i=>i.id==='supply_base_loc')?.isTrue) mult += 0.5;
-  if (hasIntel('patrol_route')    && G.intel.find(i=>i.id==='patrol_route')?.isTrue)    mult += 0.3;
-  if (hasIntel('troop_layout')    && G.intel.find(i=>i.id==='troop_layout')?.isTrue)    mult += 0.2;
+  if (hasIntel('spy_network')   && G.intel.find(i=>i.id==='spy_network')?.isTrue)   mult += 0.5;
+  if (hasIntel('battle_records')&& G.intel.find(i=>i.id==='battle_records')?.isTrue) mult += 0.3;
+  if (hasIntel('truth_revealed')&& G.intel.find(i=>i.id==='truth_revealed')?.isTrue) mult += 0.2;
   G.dropBoostMult = mult;
 }
