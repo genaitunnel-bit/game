@@ -301,8 +301,13 @@ const Scenes = (() => {
 
     recalcDropBoost();
 
-    // ── キャンバスを準備 ──
-    const canvas = document.getElementById('battle-canvas');
+    // ── キャンバスを準備（前の戦闘でDOMから削除されている場合は再作成）──
+    let canvas = document.getElementById('battle-canvas');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'battle-canvas';
+      document.body.appendChild(canvas);
+    }
     canvas.style.cssText = [
       'position:fixed', 'top:0', 'left:0', 'width:100vw',
       'height:calc(100vh - 60px)', 'z-index:15', 'display:block', 'cursor:crosshair',
@@ -383,6 +388,8 @@ const Scenes = (() => {
     hudEl.querySelector('#td-retreat-btn').addEventListener('click', () => {
       TDBattle.stopBattle();
       _removeBattleHUD();
+      // キャンバスをDOMから完全に削除（display:noneより確実）
+      document.getElementById('battle-canvas')?.remove();
       G.phase = 'map';
       setSystemDlg('システム', '撤退した。また準備を整えて挑もう。', 'var(--gold)');
       render();
@@ -444,8 +451,9 @@ const Scenes = (() => {
       },
 
       onBattleEnd: ({ victory }) => {
-        // HUDを必ず削除（stopBattleの後に呼ばれるので既にキャンバスは非表示）
+        // HUDとキャンバスをDOMから完全に削除
         _removeBattleHUD();
+        document.getElementById('battle-canvas')?.remove();
 
         if (victory) {
           const drops = rollDrops(loc, intelIds, G.dropBoostMult);
@@ -932,14 +940,12 @@ function render() {
     const _root = document.getElementById('root');
     if (_root) _root.onclick = null;
 
-    // 戦闘フェーズ以外のとき、残留している battle UI 要素をクリーンアップ
+    // 戦闘フェーズ以外のとき、残留している battle UI をDOMから完全に削除
     if (G.phase !== 'battle') {
-      ['td-hud', 'td-defeat-screen'].forEach(id => {
+      ['td-hud', 'td-defeat-screen', 'battle-canvas'].forEach(id => {
         const el = document.getElementById(id);
         if (el) el.remove();
       });
-      const cvs = document.getElementById('battle-canvas');
-      if (cvs && cvs.style.display !== 'none') cvs.style.display = 'none';
     }
 
     // ゲームオーバーチェック
