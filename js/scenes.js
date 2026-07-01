@@ -237,11 +237,39 @@ const Scenes = (() => {
 
     const party = { allyIds: [], itemIds: [] };
 
+    // ポートレートパネル更新ヘルパー
+    function updatePortrait(char, isEnemy) {
+      const box   = document.getElementById('pre-portrait-box');
+      const img   = document.getElementById('pre-portrait-img');
+      const emoji = document.getElementById('pre-portrait-emoji');
+      const name  = document.getElementById('pre-portrait-name');
+      const title = document.getElementById('pre-portrait-title');
+      const desc  = document.getElementById('pre-portrait-desc');
+      const badge = document.getElementById('pre-portrait-badge');
+      if (!box) return;
+      box.style.background = char.bgGrad || 'linear-gradient(180deg,#1a0a2e,#2a1040)';
+      if (name)  { name.textContent = char.name; name.style.color = char.color || '#FFF'; }
+      if (title) title.textContent = char.title || '';
+      if (desc)  desc.textContent  = char.desc  || '';
+      if (badge) {
+        badge.textContent = isEnemy ? '🎯 交戦目標' : '✨ 出撃メンバー';
+        badge.style.background = isEnemy ? 'rgba(255,60,60,0.35)' : 'rgba(80,200,80,0.35)';
+      }
+      if (char.portrait) {
+        if (img)   { img.src = char.portrait; img.style.display = 'block'; }
+        if (emoji) emoji.style.display = 'none';
+      } else {
+        if (img)   img.style.display = 'none';
+        if (emoji) { emoji.textContent = char.emoji; emoji.style.display = 'flex'; }
+      }
+    }
+
     function allyCardHtml(a) {
       return `
       <button class="btn btn-ghost ally-sel-btn" data-ally-id="${a.id}" style="
         display:flex;align-items:center;gap:10px;padding:8px 14px;min-width:190px;
-        border:1px solid rgba(200,159,255,0.25);border-radius:10px;text-align:left">
+        border:1px solid rgba(200,159,255,0.25);border-radius:10px;text-align:left;
+        transition:background 0.15s,border-color 0.15s">
         <span style="font-size:22px">${a.emoji}</span>
         <span>
           <strong style="color:${a.color}">${a.name}</strong><br>
@@ -252,85 +280,115 @@ const Scenes = (() => {
 
     document.getElementById('root').innerHTML = `
     ${statusBar()}
-    <div class="prebattle-overlay">
-      <div class="prebattle-box" style="max-width:820px">
-        <h2>⚔️ 出撃ブリーフィング — ${loc.name}</h2>
-        <div style="font-size:13px;color:var(--dim);text-align:center;margin-bottom:14px">
-          ターン制シミュレーション。指揮官を守りつつ、目標天使のHPを30%以下にして隣接して捕縛せよ。
-        </div>
+    <div class="prebattle-overlay" style="overflow-y:auto;max-height:100vh;padding:12px 16px">
+      <div style="display:flex;align-items:flex-start;gap:18px;max-width:1100px;margin:0 auto">
 
-        <div class="prebattle-combatants">
-          <div class="combatant-card player">
-            <div class="cc-emoji">${PLAYER_UNIT.emoji}</div>
-            <div class="cc-name">${PLAYER_UNIT.name}</div>
-            <div class="cc-stats">
-              <div class="stat-row"><span>HP</span><span class="sv">${PLAYER_UNIT.hp}</span></div>
-              <div class="stat-row"><span>攻撃</span><span class="sv">${PLAYER_UNIT.atk}</span></div>
-              <div class="stat-row"><span>防御</span><span class="sv">${PLAYER_UNIT.def}</span></div>
-              <div class="stat-row"><span>移動</span><span class="sv">${PLAYER_UNIT.mov}</span></div>
+        <!-- ポートレート列 -->
+        <div style="width:210px;flex-shrink:0;position:sticky;top:12px">
+          <div id="pre-portrait-box" style="background:${angel.bgGrad||'#1a0a2e'};border-radius:16px;overflow:hidden;position:relative;display:flex;flex-direction:column;align-items:center;min-height:260px">
+            ${angel.portrait
+              ? `<img id="pre-portrait-img" src="${angel.portrait}" alt="${angel.name}"
+                   style="width:100%;max-height:260px;object-fit:cover;object-position:top center"
+                   onerror="this.style.display='none';document.getElementById('pre-portrait-emoji').style.display='flex'">`
+              : ''}
+            <div id="pre-portrait-emoji" style="font-size:80px;display:${angel.portrait?'none':'flex'};align-items:center;justify-content:center;padding:20px 0;width:100%">${angel.emoji}</div>
+            <div id="pre-portrait-badge" style="position:absolute;top:8px;left:8px;padding:3px 8px;background:rgba(255,60,60,0.35);border-radius:6px;font-size:11px;font-weight:bold;color:#FFF">🎯 交戦目標</div>
+            <div style="padding:10px 12px;background:rgba(0,0,0,0.65);width:100%;box-sizing:border-box;text-align:center">
+              <div id="pre-portrait-name" style="font-weight:bold;font-size:15px;color:${angel.color||'#FFF'}">${angel.name}</div>
+              <div id="pre-portrait-title" style="font-size:11px;color:var(--dim);margin-top:2px">${angel.title}</div>
             </div>
           </div>
-          <div class="vs-badge">VS</div>
-          <div class="combatant-card enemy">
-            <div class="cc-emoji">${angel.emoji}</div>
-            <div class="cc-name" style="color:${angel.color}">${angel.name}<br><small>${angel.title}</small></div>
-            <div class="cc-stats">
-              <div class="stat-row"><span>HP</span><span class="sv">${angel.hp}</span></div>
-              <div class="stat-row"><span>攻撃</span><span class="sv">${angel.atk}</span></div>
-              <div class="stat-row"><span>防御</span><span class="sv">${angel.def}</span></div>
-              <div class="stat-row"><span>護衛</span><span class="sv">9体</span></div>
+          <div id="pre-portrait-desc" style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px;font-size:11px;line-height:1.7;color:#BBA8CC">${angel.desc||''}</div>
+          <div style="margin-top:10px;padding:10px;background:rgba(255,80,80,0.06);border-radius:10px;font-size:12px">
+            <div style="color:var(--dim);margin-bottom:5px;font-size:11px">交戦目標ステータス</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
+              <span style="color:#aaa">HP</span><span style="color:#FFF">${angel.hp}</span>
+              <span style="color:#aaa">攻撃</span><span style="color:#FFF">${angel.atk}</span>
+              <span style="color:#aaa">防御</span><span style="color:#FFF">${angel.def}</span>
+              <span style="color:#aaa">速度</span><span style="color:#FFF">${angel.spd}</span>
+              <span style="color:#aaa">護衛</span><span style="color:#FFF">9体</span>
             </div>
           </div>
         </div>
 
-        ${recruitedAllies.length > 0 ? `
-        <div style="margin:14px 0">
-          <div class="section-label">✨ 仲間を選ぶ（最大3人）</div>
-          <div id="ally-select" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-            ${recruitedAllies.map(allyCardHtml).join('')}
+        <!-- メイン列 -->
+        <div class="prebattle-box" style="flex:1;min-width:0;max-width:720px">
+          <h2 style="margin-bottom:6px">⚔️ 出撃ブリーフィング — ${loc.name}</h2>
+          <div style="font-size:12px;color:var(--dim);margin-bottom:14px">
+            ターン制。指揮官を守りながら目標のHPを30%以下まで削り、隣接して捕縛せよ。
           </div>
-        </div>` : `<div style="color:var(--dim);font-size:13px;margin:10px 0;text-align:center">
-          仲間はまだいない。天使を尋問して招集しよう。
-        </div>`}
 
-        ${equipIds.length > 0 ? `
-        <div style="margin:14px 0">
-          <div class="section-label">🎒 装備アイテムを持っていく（複数可）</div>
-          <div id="item-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-            ${equipIds.map(id => {
-              const d = getItemDef(id);
-              return `<button class="btn btn-ghost item-sel-btn" data-item-id="${id}" style="
-                padding:6px 12px;border:1px solid rgba(100,220,100,0.25);border-radius:8px;text-align:left">
-                ${d.icon} <strong>${d.name}</strong>
-                <span style="font-size:11px;color:var(--dim);display:block">${d.desc}</span>
-              </button>`;
-            }).join('')}
+          <div class="prebattle-combatants" style="margin-bottom:14px">
+            <div class="combatant-card player">
+              <div class="cc-emoji">${PLAYER_UNIT.emoji}</div>
+              <div class="cc-name">${PLAYER_UNIT.name}</div>
+              <div class="cc-stats">
+                <div class="stat-row"><span>HP</span><span class="sv">${PLAYER_UNIT.hp}</span></div>
+                <div class="stat-row"><span>攻撃</span><span class="sv">${PLAYER_UNIT.atk}</span></div>
+                <div class="stat-row"><span>防御</span><span class="sv">${PLAYER_UNIT.def}</span></div>
+                <div class="stat-row"><span>移動</span><span class="sv">${PLAYER_UNIT.mov}</span></div>
+              </div>
+            </div>
           </div>
-        </div>` : ''}
 
-        <div class="row" style="justify-content:center;gap:14px;margin-top:18px">
-          <button class="btn btn-lavender btn-lg" id="btn-fe-sortie">⚔️ 出撃！（仲間 0人）</button>
-          <button class="btn btn-ghost" id="btn-cancel-battle">← キャンセル</button>
+          ${recruitedAllies.length > 0 ? `
+          <div style="margin-bottom:14px">
+            <div class="section-label">✨ 仲間を選ぶ（最大3人）</div>
+            <div id="ally-select" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
+              ${recruitedAllies.map(allyCardHtml).join('')}
+            </div>
+          </div>` : `<div style="color:var(--dim);font-size:13px;margin:10px 0">
+            仲間はまだいない。天使を尋問して招集しよう。
+          </div>`}
+
+          ${equipIds.length > 0 ? `
+          <div style="margin-bottom:14px">
+            <div class="section-label">🎒 装備アイテムを持っていく（複数可）</div>
+            <div id="item-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+              ${equipIds.map(id => {
+                const d = getItemDef(id);
+                return `<button class="btn btn-ghost item-sel-btn" data-item-id="${id}" style="
+                  padding:6px 12px;border:1px solid rgba(100,220,100,0.25);border-radius:8px;text-align:left">
+                  ${d.icon} <strong>${d.name}</strong>
+                  <span style="font-size:11px;color:var(--dim);display:block">${d.desc}</span>
+                </button>`;
+              }).join('')}
+            </div>
+          </div>` : ''}
+
+          <div class="row" style="justify-content:center;gap:14px;margin-top:18px">
+            <button class="btn btn-lavender btn-lg" id="btn-fe-sortie">⚔️ 出撃！（仲間 0人）</button>
+            <button class="btn btn-ghost" id="btn-cancel-battle">← キャンセル</button>
+          </div>
         </div>
       </div>
     </div>`;
 
-    // 仲間ボタン
+    // 仲間ボタン — クリック＆ホバーでポートレート切替
     document.getElementById('ally-select')?.querySelectorAll('.ally-sel-btn').forEach(btn => {
+      const a = recruitedAllies.find(x => x.id === btn.dataset.allyId);
       btn.addEventListener('click', () => {
         const id  = btn.dataset.allyId;
         const idx = party.allyIds.indexOf(id);
         if (idx >= 0) {
           party.allyIds.splice(idx, 1);
-          btn.style.background = '';
+          btn.style.background  = '';
           btn.style.borderColor = 'rgba(200,159,255,0.25)';
+          const last = party.allyIds.length > 0 ? recruitedAllies.find(x => x.id === party.allyIds[party.allyIds.length-1]) : null;
+          updatePortrait(last || angel, !last);
         } else if (party.allyIds.length < 3) {
           party.allyIds.push(id);
-          btn.style.background = 'rgba(200,159,255,0.2)';
+          btn.style.background  = 'rgba(200,159,255,0.2)';
           btn.style.borderColor = 'rgba(200,159,255,0.7)';
+          if (a) updatePortrait(a, false);
         }
         const sortieBtn = document.getElementById('btn-fe-sortie');
         if (sortieBtn) sortieBtn.textContent = `⚔️ 出撃！（仲間 ${party.allyIds.length}人）`;
+      });
+      btn.addEventListener('mouseenter', () => { if (a) updatePortrait(a, false); });
+      btn.addEventListener('mouseleave', () => {
+        const last = party.allyIds.length > 0 ? recruitedAllies.find(x => x.id === party.allyIds[party.allyIds.length-1]) : null;
+        updatePortrait(last || angel, !last);
       });
     });
 
@@ -341,11 +399,11 @@ const Scenes = (() => {
         const idx = party.itemIds.indexOf(id);
         if (idx >= 0) {
           party.itemIds.splice(idx, 1);
-          btn.style.background = '';
+          btn.style.background  = '';
           btn.style.borderColor = 'rgba(100,220,100,0.25)';
         } else {
           party.itemIds.push(id);
-          btn.style.background = 'rgba(100,220,100,0.15)';
+          btn.style.background  = 'rgba(100,220,100,0.15)';
           btn.style.borderColor = 'rgba(100,220,100,0.7)';
         }
       });
