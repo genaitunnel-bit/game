@@ -282,12 +282,18 @@ const Scenes = (() => {
   /* ======================================================
      タワーディフェンス戦闘画面
      ====================================================== */
+
+  // HUDをbodyから削除するヘルパー（#rootとは別の重ね合わせコンテキストにあるため）
+  function _removeBattleHUD() {
+    const hud = document.getElementById('td-hud');
+    if (hud) hud.remove();
+  }
+
   function renderBattle(locationId, useWeakness) {
-    const loc   = getLocation(locationId);
-    const angel = getAngel(loc.angelId);
+    const loc      = getLocation(locationId);
+    const angel    = getAngel(loc.angelId);
     const intelIds = G.intel.filter(i=>i.isTrue).map(i=>i.id);
 
-    // Intel効果の計算
     const intelEffects = {
       bossWeakness:  useWeakness && hasIntel(angel.weaknessId),
       cheaperTowers: hasIntel('supply_base_loc') && G.intel.find(i=>i.id==='supply_base_loc')?.isTrue,
@@ -295,84 +301,99 @@ const Scenes = (() => {
 
     recalcDropBoost();
 
+    // ── キャンバスを準備 ──
     const canvas = document.getElementById('battle-canvas');
-    canvas.style.position = 'fixed';
-    canvas.style.top    = '0';
-    canvas.style.left   = '0';
-    canvas.style.width  = '100vw';
-    canvas.style.height = 'calc(100vh - 60px)';
-    canvas.style.zIndex = '15';
+    canvas.style.cssText = [
+      'position:fixed', 'top:0', 'left:0', 'width:100vw',
+      'height:calc(100vh - 60px)', 'z-index:15', 'display:block', 'cursor:crosshair',
+    ].join(';') + ';';
+    canvas.width  = window.innerWidth;
+    canvas.height = Math.max(200, window.innerHeight - 60);
 
-    // Build battle items for use during fight
-    const battleItems = G.inventory.filter(id => { const d = getItemDef(id); return d && d.cat === 'battle'; });
+    // ── root は背景のみ（黒）──
+    document.getElementById('root').innerHTML =
+      '<div style="position:fixed;inset:0;background:#0a1520;z-index:5"></div>';
+
+    // ── 既存HUDを削除してから作り直す ──
+    _removeBattleHUD();
+
+    const battleItems   = G.inventory.filter(id => { const d = getItemDef(id); return d && d.cat === 'battle'; });
     const itemSlotsHTML = battleItems.slice(0, 4).map(id => {
-      const d = getItemDef(id);
-      const count = G.inventory.filter(x=>x===id).length;
-      return `<div class="td-item-slot" data-item-id="${id}" title="${d.name}: ${d.desc}">
-        ${d.icon}<span class="slot-count">${count}</span>
-      </div>`;
+      const d     = getItemDef(id);
+      const count = G.inventory.filter(x => x === id).length;
+      return `<div class="td-item-slot" data-item-id="${id}" title="${d.name}: ${d.desc}">${d.icon}<span class="slot-count">${count}</span></div>`;
     }).join('');
 
-    // Tower buttons
-    const towerDefs = TDBattle.getTowerDefs();
-    const towerBtnsHTML = Object.entries(towerDefs).map(([type, def]) => `
-      <button class="td-tower-btn" data-type="${type}">
+    const towerDefs    = TDBattle.getTowerDefs();
+    const towerBtnsHTML = Object.entries(towerDefs).map(([type, def]) =>
+      `<button class="td-tower-btn" data-type="${type}">
         <span class="tw-icon">${def.icon}</span>
         <span class="tw-name">${def.name}</span>
         <span class="tw-cost">${def.cost}G</span>
-      </button>`).join('');
+      </button>`
+    ).join('');
 
-    document.getElementById('root').innerHTML = `
-    <div id="td-battle-wrap" style="padding-top:62vh">
-      <div id="td-hud">
-        <div id="td-wave-bar-wrap">
-          <div id="td-wave-label">WAVE 1 / ${loc.waves.length}</div>
-          <div id="td-wave-bar-bg"><div id="td-wave-bar" style="width:100%"></div></div>
-        </div>
-        <div class="td-stat"><span class="label">GOLD</span><span id="td-gold-val">--G</span></div>
-        <div class="td-stat"><span class="label">拠点HP</span><span id="td-hp-val">--</span></div>
-        <div class="td-stat"><span class="label">撃破</span><span id="td-kill-val">0</span></div>
-        <div id="td-phase-label" class="prep">準備中</div>
-        <div id="td-tower-panel">${towerBtnsHTML}</div>
-        <div id="td-item-bar">${itemSlotsHTML || '<span style="color:#555;font-size:12px">アイテムなし</span>'}</div>
-        <button id="td-early-btn">▶ 早期開始</button>
-        <button id="td-retreat-btn">撤退</button>
+    // ── HUDをbody直下に追加（#rootのz-indexの影響を受けないようにする）──
+    const hudEl = document.createElement('div');
+    hudEl.id = 'td-hud';
+    // CSS未ロード時のフォールバックとして重要なスタイルをインラインでも指定
+    hudEl.style.cssText = [
+      'position:fixed', 'bottom:0', 'left:0', 'right:0', 'z-index:100',
+      'display:flex', 'align-items:center', 'gap:8px', 'padding:6px 10px',
+      'background:rgba(8,4,20,0.97)', 'border-top:1px solid rgba(200,159,255,0.25)',
+      'flex-wrap:wrap', 'min-height:56px',
+    ].join(';') + ';';
+    hudEl.innerHTML = `
+      <div id="td-wave-bar-wrap">
+        <div id="td-wave-label">WAVE 1 / ${loc.waves.length}</div>
+        <div id="td-wave-bar-bg"><div id="td-wave-bar" style="width:100%"></div></div>
       </div>
-    </div>`;
+      <div class="td-stat"><span class="label">GOLD</span><span id="td-gold-val">--G</span></div>
+      <div class="td-stat"><span class="label">拠点HP</span><span id="td-hp-val">--</span></div>
+      <div class="td-stat"><span class="label">撃破</span><span id="td-kill-val">0</span></div>
+      <div id="td-phase-label" class="prep">準備中</div>
+      <div id="td-tower-panel">${towerBtnsHTML}</div>
+      <div id="td-item-bar">${itemSlotsHTML || '<span style="color:#555;font-size:12px">アイテムなし</span>'}</div>
+      <button id="td-early-btn">▶ 早期開始</button>
+      <button id="td-retreat-btn">撤退</button>`;
+    document.body.appendChild(hudEl);
 
-    // Bind tower buttons
-    document.getElementById('td-tower-panel').querySelectorAll('.td-tower-btn').forEach(btn => {
+    // ── ボタンバインド ──
+    hudEl.querySelector('#td-tower-panel').querySelectorAll('.td-tower-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         TDBattle.selectTowerType(btn.dataset.type);
-        document.querySelectorAll('.td-tower-btn').forEach(b => b.classList.toggle('selected', b.dataset.type === btn.dataset.type && TDBattle.getState() && TDBattle.getState().selectedType === btn.dataset.type));
+        hudEl.querySelectorAll('.td-tower-btn').forEach(b =>
+          b.classList.toggle('selected',
+            b.dataset.type === btn.dataset.type &&
+            TDBattle.getState() &&
+            TDBattle.getState().selectedType === btn.dataset.type)
+        );
       });
     });
 
-    // Bind item slots
-    document.getElementById('td-item-bar').querySelectorAll('.td-item-slot').forEach(slot => {
+    hudEl.querySelector('#td-item-bar').querySelectorAll('.td-item-slot').forEach(slot => {
       slot.addEventListener('click', () => {
         const id = slot.dataset.itemId;
-        if (removeItemFromInventory(id)) {
-          TDBattle.useBattleItem(id);
-          slot.remove();
-        }
+        if (removeItemFromInventory(id)) { TDBattle.useBattleItem(id); slot.remove(); }
       });
     });
 
-    document.getElementById('td-early-btn').addEventListener('click', () => TDBattle.startWaveEarly());
-    document.getElementById('td-retreat-btn').addEventListener('click', () => {
+    hudEl.querySelector('#td-early-btn').addEventListener('click', () => TDBattle.startWaveEarly());
+
+    hudEl.querySelector('#td-retreat-btn').addEventListener('click', () => {
       TDBattle.stopBattle();
+      _removeBattleHUD();
       G.phase = 'map';
       setSystemDlg('システム', '撤退した。また準備を整えて挑もう。', 'var(--gold)');
       render();
     });
 
-    // Apply equipment bonuses
+    // ── 装備効果を適用 ──
     for (const eff of G.equippedEffects) {
       TDBattle.applyEquipmentBonus(eff);
     }
 
-    // Start TD engine
+    // ── TD エンジン起動 ──
     TDBattle.startBattle(canvas, {
       locationId:    loc.id,
       angel:         angel,
@@ -383,75 +404,80 @@ const Scenes = (() => {
       dropBoostMult: G.dropBoostMult,
     }, {
       onHUDUpdate: ({ gold, baseHp, baseMaxHp, wave, totalWaves, phase, prepTimer, killed }) => {
-        const goldEl  = document.getElementById('td-gold-val');
-        const hpEl    = document.getElementById('td-hp-val');
-        const killEl  = document.getElementById('td-kill-val');
-        const waveEl  = document.getElementById('td-wave-label');
-        const barEl   = document.getElementById('td-wave-bar');
-        const phaseEl = document.getElementById('td-phase-label');
-        const earlyBtn= document.getElementById('td-early-btn');
+        const goldEl   = document.getElementById('td-gold-val');
+        const hpEl     = document.getElementById('td-hp-val');
+        const killEl   = document.getElementById('td-kill-val');
+        const waveEl   = document.getElementById('td-wave-label');
+        const barEl    = document.getElementById('td-wave-bar');
+        const phaseEl  = document.getElementById('td-phase-label');
+        const earlyBtn = document.getElementById('td-early-btn');
 
-        if (goldEl)  goldEl.textContent  = `${gold}G`;
-        if (hpEl)    hpEl.textContent    = `${baseHp}/${baseMaxHp}`;
-        if (killEl)  killEl.textContent  = killed;
+        if (goldEl)  goldEl.textContent = `${gold}G`;
+        if (hpEl)    hpEl.textContent   = `${baseHp}/${baseMaxHp}`;
+        if (killEl)  killEl.textContent = killed;
 
         if (phase === 'prep' || phase === 'between') {
-          const maxPrep = loc.waves[Math.min(wave, loc.waves.length-1)]?.prepTime || 30;
+          const maxPrep = loc.waves[Math.min(wave, loc.waves.length - 1)]?.prepTime || 30;
           const pct     = Math.min(1, prepTimer / maxPrep);
-          if (barEl)   barEl.style.width  = `${pct*100}%`;
-          if (waveEl)  waveEl.textContent = phase === 'prep' ? `Wave ${wave+1} / ${totalWaves} 準備中 ${prepTimer}s` : `次のWave まで ${prepTimer}s`;
-          if (phaseEl) { phaseEl.textContent = `準備 ${prepTimer}s`; phaseEl.className='prep'; }
+          if (barEl)   barEl.style.width  = `${pct * 100}%`;
+          if (waveEl)  waveEl.textContent = phase === 'prep'
+            ? `Wave ${wave + 1} / ${totalWaves} 準備中 ${prepTimer}s`
+            : `次のWave まで ${prepTimer}s`;
+          if (phaseEl) { phaseEl.textContent = `準備 ${prepTimer}s`; phaseEl.className = 'prep'; }
           if (earlyBtn) earlyBtn.disabled = false;
         } else if (phase === 'wave') {
           if (waveEl)  waveEl.textContent = `WAVE ${wave} / ${totalWaves} 進行中`;
           if (barEl)   barEl.style.width  = '100%';
-          if (phaseEl) { phaseEl.textContent = `Wave ${wave} 進行中`; phaseEl.className='wave'; }
+          if (phaseEl) { phaseEl.textContent = `Wave ${wave} 進行中`; phaseEl.className = 'wave'; }
           if (earlyBtn) earlyBtn.disabled = true;
         }
       },
+
       onWaveStart: ({ wave, total }) => {
         setSystemDlg('ウェーブ', `Wave ${wave} / ${total} 開始！`, 'var(--red)');
       },
       onWaveClear: ({ wave, total }) => {
         setSystemDlg('ウェーブクリア', `Wave ${wave} / ${total} 完了。次のウェーブまで準備を。`, 'var(--green)');
       },
-      onBossKilled: ({ angelId }) => {
+      onBossKilled: () => {
         setSystemDlg('ボス撃破！', `${angel.name}を撃破した！捕縛に成功！`, 'var(--gold)');
       },
-      onBattleEnd: ({ victory, stats }) => {
+
+      onBattleEnd: ({ victory }) => {
+        // HUDを必ず削除（stopBattleの後に呼ばれるので既にキャンバスは非表示）
+        _removeBattleHUD();
+
         if (victory) {
-          // Roll drops
           const drops = rollDrops(loc, intelIds, G.dropBoostMult);
           applyDrops(drops);
-
-          // Apply any pending equipment effects
           for (const id of G.inventory.filter(i => { const d = getItemDef(i); return d && d.cat === 'equipment'; })) {
             const d = getItemDef(id);
-            if (d.effect && !['gold_bonus','base_hp'].includes(d.effect)) {
-              G.equippedEffects.push({ effect:d.effect, value:d.value, itemName:d.name });
+            if (d.effect && !['gold_bonus', 'base_hp'].includes(d.effect)) {
+              G.equippedEffects.push({ type: d.effect, value: d.value, itemName: d.name });
             }
           }
-
           G._battleDrops = drops;
-          onCapture(locationId, angel.id, false /* don't call BattleScene.stop */);
+          onCapture(locationId, angel.id, false);
         } else {
           G.player.baseHp = Math.max(0, G.player.baseHp - 40);
-          // 敗北結果画面を表示してからマップへ
-          document.getElementById('root').innerHTML = `
-          <div style="position:fixed;inset:0;background:rgba(10,4,25,0.96);z-index:20;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px">
+          // 敗北画面（z-index:200 でキャンバスより確実に上）
+          const defeatEl = document.createElement('div');
+          defeatEl.id = 'td-defeat-screen';
+          defeatEl.style.cssText = 'position:fixed;inset:0;background:rgba(10,4,25,0.97);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px';
+          defeatEl.innerHTML = `
             <div style="font-size:52px">💀</div>
             <h2 style="color:#FF5E7A;font-size:28px;margin:0">拠点陥落</h2>
             <p style="color:#aaa;font-size:15px;text-align:center;max-width:360px">
               天使の波状攻撃を防ぎきれなかった。<br>
               自陣HP: <span style="color:#FF5E7A">${G.player.baseHp}/${G.player.baseMaxHp}</span>
             </p>
-            <button id="btn-defeat-back" style="
-              padding:12px 32px;background:linear-gradient(135deg,#7B5EA7,#C89FFF);
-              color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer">
+            <button id="btn-defeat-back" style="padding:12px 32px;background:linear-gradient(135deg,#7B5EA7,#C89FFF);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer">
               マップへ戻る
-            </button>
-          </div>`;
+            </button>`;
+          document.body.appendChild(defeatEl);
+
           document.getElementById('btn-defeat-back').addEventListener('click', () => {
+            defeatEl.remove();
             setSystemDlg('敗北', '拠点が突破された……態勢を立て直せ。', 'var(--red)');
             G.phase = 'map';
             render();
@@ -905,6 +931,16 @@ function render() {
     // 前のシーンの root.onclick を必ずクリア（ストーリー画面のクリックが残留するのを防ぐ）
     const _root = document.getElementById('root');
     if (_root) _root.onclick = null;
+
+    // 戦闘フェーズ以外のとき、残留している battle UI 要素をクリーンアップ
+    if (G.phase !== 'battle') {
+      ['td-hud', 'td-defeat-screen'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.remove();
+      });
+      const cvs = document.getElementById('battle-canvas');
+      if (cvs && cvs.style.display !== 'none') cvs.style.display = 'none';
+    }
 
     // ゲームオーバーチェック
     if (G.player && G.player.baseHp <= 0 && G.phase !== 'title' && G.phase !== 'story') {
