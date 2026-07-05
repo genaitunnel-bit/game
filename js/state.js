@@ -26,8 +26,8 @@ function initGameState() {
     // capturedAngels: { angelId → { pain, obedience, progression, expression, scenesPlayed } }
     capturedAngels: {},
 
-    // ルミエルは最初から仲間（recruited=true）
-    allies: ['lumiel'],   // 戦闘パーティに参加できる天使IDリスト
+    // ルミエルはチュートリアル後に加入
+    allies: [],   // 戦闘パーティに参加できる天使IDリスト
   };
 }
 

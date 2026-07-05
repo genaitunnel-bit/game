@@ -75,10 +75,85 @@ const Scenes = (() => {
       G.storyIdx++;
       if (G.storyIdx >= STORY_SCENES.length) {
         G.storyIdx = 0;
-        G.phase = 'stage_select';
+        G.phase = 'tutorial_prep';
       }
       render();
     };
+  }
+
+  /* ======================================================
+     チュートリアル
+     ====================================================== */
+  function renderTutorialPrep() {
+    const root = document.getElementById('root');
+    root.innerHTML = `
+    <div style="max-width:480px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;font-family:sans-serif">
+      <div style="font-size:10px;color:#FFD700;letter-spacing:3px">TUTORIAL</div>
+      <div style="font-size:72px;filter:drop-shadow(0 0 24px #B8E4FF)">📖</div>
+      <h2 style="color:#B8E4FF;margin:0;font-size:20px;text-align:center">ルミエルとの実戦訓練</h2>
+      <div style="background:rgba(184,228,255,0.08);border:1px solid rgba(184,228,255,0.25);border-radius:12px;padding:14px 18px;font-size:13px;color:#CCC;line-height:1.9;text-align:center">
+        「あなたの実力を確かめさせてください。<br>
+        一緒に戦えるか——まず、私と戦ってみて。」<br>
+        <span style="font-size:11px;color:#888">— ルミエル</span>
+      </div>
+      <div style="background:rgba(0,0,0,0.35);border-radius:10px;padding:12px 16px;font-size:11px;color:#AAA;line-height:1.9;width:100%;box-sizing:border-box">
+        <div style="color:#FFD700;margin-bottom:6px;font-weight:bold">⚔️ バトル操作</div>
+        <div>• <strong style="color:#EEE">攻撃</strong> — 通常攻撃で敵HPを削る</div>
+        <div>• <strong style="color:#EEE">スキル</strong> — MP消費で強力な技を発動</div>
+        <div>• <strong style="color:#88D8FF">属性弱点スキル</strong> — ダメージ×1.6倍</div>
+        <div>• <strong style="color:#4CFF7A">回復スキル</strong> — HPが減ったら使う</div>
+        <div style="margin-top:6px;color:#FFCC88">★ 弱点属性は光（最初から判明済み）</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;width:100%">
+        <button class="btn btn-pink btn-lg" id="btn-tut-fight">⚔️ 戦闘開始</button>
+        <button class="btn btn-ghost" id="btn-tut-skip">→ スキップして尋問へ</button>
+      </div>
+    </div>`;
+
+    document.getElementById('btn-tut-fight').onclick = () => _startTutorialBattle();
+    document.getElementById('btn-tut-skip').onclick  = () => _captureAndInterrogateLumiel();
+  }
+
+  function _captureAndInterrogateLumiel() {
+    G.capturedAngels.lumiel = G.capturedAngels.lumiel || {
+      pain: 0, obedience: 0, progression: 0,
+      expression: 'normal', scenesPlayed: [], _lastScene: 'captive',
+    };
+    if (!G.allies.includes('lumiel')) G.allies.push('lumiel');
+    G._interrogatingId = 'lumiel';
+    G.phase = 'interrogation';
+    render();
+  }
+
+  function _startTutorialBattle() {
+    const lumiel = getAngel('lumiel');
+    const party  = [Object.assign({}, PLAYER_UNIT, {
+      hp: PLAYER_UNIT.maxHp, mp: PLAYER_UNIT.maxMp,
+      skills: PLAYER_SKILLS.map(s => ({ ...s })),
+    })];
+    const enemies = [{
+      id: 'lumiel_tut', name: lumiel.name, emoji: lumiel.emoji, color: lumiel.color,
+      hp: 70, maxHp: 70, mp: 30, maxMp: 30,
+      atk: 9, def: 4, spd: lumiel.spd,
+      skills: (ANGEL_BATTLE_SKILLS.lumiel || []).map(sk => ({ ...sk })),
+      side: 'enemy', isBoss: false,
+    }];
+
+    G.phase = 'battle';
+    document.getElementById('root').innerHTML = '';
+
+    RPGBattle.startBattle(document.body, {
+      party, enemies,
+      weaknesses: ['light'], knownWeaknesses: ['light'],
+      items: [],
+    }, {
+      onBattleEnd() {
+        RPGBattle.stopBattle();
+        const r = document.getElementById('root');
+        if (r) r.innerHTML = '';
+        _captureAndInterrogateLumiel();
+      },
+    });
   }
 
   /* ======================================================
@@ -108,6 +183,19 @@ const Scenes = (() => {
         <span style="font-size:28px">📖</span>
         <div style="font-size:12px;color:#CCC">"${_lumielHint()}" <span style="color:#B8E4FF">— ルミエル</span></div>
       </div>
+
+      <!-- ルミエル（盟友）再尋問 -->
+      ${G.capturedAngels.lumiel ? (() => {
+        const lm = getAngel('lumiel');
+        return `<div style="background:rgba(184,228,255,0.06);border:1px solid rgba(184,228,255,0.25);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:32px;filter:drop-shadow(0 0 8px #B8E4FF)">📖</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:bold;color:#B8E4FF">ルミエル <span style="font-size:10px;color:#888">盟友</span></div>
+            <div style="font-size:10px;color:#666">記録補佐の天使 — 仲間</div>
+          </div>
+          <button class="btn btn-pink btn-sm" data-inq="lumiel">尋問</button>
+        </div>`;
+      })() : ''}
 
       <div style="display:flex;flex-direction:column;gap:8px">
         ${STAGE_ORDER.map((locId, i) => {
@@ -793,6 +881,7 @@ const Scenes = (() => {
   return {
     renderTitle,
     renderStory,
+    renderTutorialPrep,
     renderStageSelect,
     renderStagePrep,
     renderStageClear,
@@ -814,6 +903,7 @@ function render() {
     switch (G.phase) {
       case 'title':         Scenes.renderTitle();          break;
       case 'story':         Scenes.renderStory();          break;
+      case 'tutorial_prep': Scenes.renderTutorialPrep();   break;
       case 'stage_select':  Scenes.renderStageSelect();    break;
       case 'stage_prep':    Scenes.renderStagePrep();      break;
       case 'battle':        /* RPGBattle が DOM を管理 */   break;
