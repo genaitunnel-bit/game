@@ -578,23 +578,33 @@ const Scenes = (() => {
      尋問シーン（3パラメーターシステム + CGシステム）
      ====================================================== */
 
-  // 表情 → CGシーン対応
-  const _EXPR_TO_SCENE = {
-    normal:     'captive',
-    scared:     'sankaku',
-    excited:    'pleasure',
-    broken:     'break',
-    crying:     'break',
-    submissive: 'submissive',
-  };
+  // 表情+パラメーター → CGシーン（複合条件）
+  function _getCGScene(cap, methodId) {
+    if (methodId) return _METHOD_TO_SCENE[methodId] || 'captive';
+    const { pain, obedience, progression, expression } = cap;
+    if (expression === 'submissive' && progression >= 100) return 'bed';
+    if (expression === 'submissive') return 'submissive';
+    if (expression === 'broken')     return 'break';
+    if (expression === 'crying')     return 'break';
+    if (expression === 'excited' && obedience >= 60) return 'nipple';
+    if (expression === 'excited')    return 'pleasure';
+    if (expression === 'scared' && pain >= 60) return 'neck';
+    if (expression === 'scared')     return 'sankaku';
+    return 'captive';
+  }
 
-  // 尋問方法 → CGシーン対応
+  // 尋問方法 → CGシーン（1対1対応）
   const _METHOD_TO_SCENE = {
-    talk:    'captive', gift:   'captive', praise: 'captive', coddle: 'captive',
-    mock:    'sankaku', press:  'sankaku', deprive:'sankaku',
-    pleasure:'pleasure',
-    break:   'break',
-    command: 'submissive',
+    talk:    'captive',
+    gift:    'captive',
+    praise:  'captive',
+    coddle:  'bed',        // 甘やかす → ラブホベッド
+    mock:    'sankaku',    // 嘲る    → ボンデージ
+    press:   'nipple',     // 追い詰める → 乳首責め
+    deprive: 'anal_chain', // 感覚を奪う → アナルチェーン
+    pleasure:'pleasure',   // 快楽    → 胸刺激
+    command: 'submissive', // 命令    → 服従（ラブホ）
+    break:   'break',      // 壊す    → 崩壊（ダンジョン）
   };
 
   function renderInterrogation() {
@@ -618,19 +628,29 @@ const Scenes = (() => {
     else                              cap.expression = 'normal';
 
     // CGファイルパスを決定（lastSceneがあれば優先）
-    const sceneName = cap._lastScene || _EXPR_TO_SCENE[cap.expression] || 'captive';
+    const sceneName = cap._lastScene || _getCGScene(cap, null);
     const cgPath    = `img/scenes/${angelId}_${sceneName}.png`;
 
     const exprEmoji = { normal:'😐', scared:'😨', excited:'😳', broken:'💔', crying:'😭', submissive:'🥺' };
     const exprLabel = { normal:'通常', scared:'怯え', excited:'興奮', broken:'崩壊', crying:'泣き', submissive:'服従' };
 
-    const sceneLabel = { captive:'捕縛', sankaku:'拷問', pleasure:'快楽', break:'崩壊', submissive:'服従' };
-    const sceneHint  = {
-      captive:    '穏やかに話しかけるか、責め始めるか——',
-      sankaku:    'さらに追い詰めるか、快楽に切り替えるか——',
-      pleasure:   '快楽を続けるか、より激しくするか——',
-      break:      'もう少しで壊れる——手を止めるか、押し切るか——',
-      submissive: '完全に支配下に置いた——望みのままに——',
+    const sceneLabel = {
+      captive:   '捕縛',    sankaku:   '拘束',    pleasure:  '快楽',
+      break:     '崩壊',    submissive:'服従',    anal_chain:'鎖責め',
+      nipple:    '乳首責め', doggy:     '後背位',  neck:      '支配',
+      bed:       'ラブホ',
+    };
+    const sceneHint = {
+      captive:   '穏やかに話すか、責め始めるか——',
+      sankaku:   'さらに締め上げるか、快楽に切り替えるか——',
+      pleasure:  '快楽を続けるか、より激しくするか——',
+      break:     'もう少しで壊れる——手を止めるか、押し切るか——',
+      submissive:'完全に支配下に置いた——望みのままに——',
+      anal_chain:'感覚を奪い、意識をこちらに向けさせる——',
+      nipple:    '弱点を見つけた——もっと攻めるか——',
+      doggy:     '完全に制圧した——',
+      neck:      '逃げ場を塞いだ——',
+      bed:       '互いの距離が縮まっている——',
     };
 
     const isSuperMode = cap.progression >= 100;
@@ -732,7 +752,7 @@ const Scenes = (() => {
         cap.pain        = Math.max(0, Math.min(100, cap.pain        + m.painMod));
         cap.obedience   = Math.max(0, Math.min(100, cap.obedience   + m.obeyMod));
         cap.progression = Math.max(0, Math.min(100, cap.progression + m.progMod));
-        cap._lastScene  = _METHOD_TO_SCENE[m.id] || 'captive';
+        cap._lastScene  = _getCGScene(cap, m.id);
 
         // CGを即時切り替え
         const newCg = document.getElementById('inq-cg');
