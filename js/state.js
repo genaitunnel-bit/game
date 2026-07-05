@@ -8,51 +8,26 @@ let G = {};
 
 function initGameState() {
   G = {
-    phase: 'title',          // title | story | map | prebattle | battle | capture | interrogation | intelResult | attackPlan | result | gameover
-    turn:  1,
-    player: {
-      baseHp:    300,
-      baseMaxHp: 300,
-      gold:      1200,
-      defBonus:  0,
-      atkBonus:  0,
-      critBonus: 0,
-      secretEnd: false,
-    },
-    /* 収集済み情報 */
-    intel: [],              // { id, name, cat, content, accuracy, isTrue, from, method, isNew }
-    /* 捕虜リスト（尋問待ち） */
-    prisoners: [],
-    /* 仲間になった天使 */
-    allies: [{ id:'lumiel', trust:100, fear:0, sessions:0, recruited:true, revealedTopics:new Set() }],
-    /* 制圧済み拠点 */
-    clearedLocs: new Set(),
-    /* 報復強度 */
-    retaliationPower: 0,
-    /* 現在の戦闘状態 */
-    battle: null,
-    /* 現在の尋問状態 */
-    interrogation: null,
-    /* 最後に入手した情報（結果表示用） */
-    lastIntel: [],
-    /* ストーリーシーン進行 */
+    // ローグライト進行
+    phase:  'title',  // title|story|stage_select|stage_prep|battle|interrogation|game_over|game_clear
+    stage:  0,        // 現在のステージindex（STAGE_ORDER）
     storyIdx: 0,
-    /* 攻撃対象 */
-    pendingAttackLoc: null,
-    /* 攻撃結果 */
-    attackResult: null,
-    /* 招集シーン */
-    recruitingId: null,
-    /* アイテムインベントリ */
-    inventory: [],       // itemId の配列（重複あり）
-    /* 装備スロット（有効中のequipmentアイテム効果） */
-    equippedEffects: [], // { effect, value, itemName } の配列
-    /* ドロップブースト乗数（intel情報によって増加）*/
-    dropBoostMult: 1.0,
-    /* イベントシーン状態 */
-    eventScene: null,    // { angelId, eventId, lineIdx }
-    /* 尋問イベント 既に見たシーンのIDセット */
-    seenEvents: new Set(),
+
+    // プレイヤーHP（ローグライト体力）
+    player: { hp: 300, maxHp: 300 },
+
+    // ─── ステージ準備フェーズ ─────────────────────────
+    // 毎ステージ開始時にランダム生成される弱点
+    stageWeaknesses:    [],   // 実際の弱点（非公開）
+    revealedWeaknesses: [],   // 尋問で判明した弱点
+    sessionsLeft:       3,    // 残り情報収集セッション数
+
+    // ─── 鹵獲・尋問システム ───────────────────────────
+    // capturedAngels: { angelId → { pain, obedience, progression, expression, scenesPlayed } }
+    capturedAngels: {},
+
+    // ルミエルは最初から仲間（recruited=true）
+    allies: ['lumiel'],   // 戦闘パーティに参加できる天使IDリスト
   };
 }
 

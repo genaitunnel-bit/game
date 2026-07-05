@@ -55,6 +55,8 @@ const FEBattle = (() => {
         mov:a.mov||4, rng:a.rng||1,
         c:startPos[i+1][0], r:startPos[i+1][1],
         hasMoved:false, hasActed:false, dead:false, isCommander:false,
+        portrait:a.portrait||null, bgGrad:a.bgGrad||null,
+        title:a.title||null, desc:a.desc||null,
       });
     });
 
@@ -82,6 +84,8 @@ const FEBattle = (() => {
       mov:boss.mov||3, rng:boss.rng||1, gold:boss.gold||80,
       c:9, r:3,
       hasMoved:false, hasActed:false, dead:false, isBoss:true,
+      portrait:boss.portrait||null, bgGrad:boss.bgGrad||null,
+      title:boss.title||null, desc:boss.desc||null,
     });
 
     S = {
@@ -97,6 +101,7 @@ const FEBattle = (() => {
       config,
       combatAnim:  null,   // 戦闘アニメーション状態
       activeEnemy: null,   // 敵フェーズで現在行動中の敵ID
+      _lastHoveredId: null,
     };
 
     _canvas.onclick     = _onCanvasClick;
@@ -192,10 +197,19 @@ const FEBattle = (() => {
     const rect = _canvas.getBoundingClientRect();
     const mx = (ev.clientX - rect.left) * (_canvas.width / rect.width);
     const my = (ev.clientY - rect.top)  * (_canvas.height / rect.height);
-    S.hoverCell = {
-      c: Math.floor((mx - S.offsetX) / S.cellSize),
-      r: Math.floor((my - S.offsetY) / S.cellSize),
-    };
+    const hc = Math.floor((mx - S.offsetX) / S.cellSize);
+    const hr = Math.floor((my - S.offsetY) / S.cellSize);
+    S.hoverCell = { c: hc, r: hr };
+
+    // セル上のユニットを検出してホバーコールバック
+    const unit = (hc >= 0 && hc < COLS && hr >= 0 && hr < ROWS)
+      ? (S.units.find(u => u.c === hc && u.r === hr && !u.dead) || null)
+      : null;
+    const hovId = unit ? unit.id : null;
+    if (hovId !== S._lastHoveredId) {
+      S._lastHoveredId = hovId;
+      _cb.onUnitHover && _cb.onUnitHover(unit);
+    }
   }
 
   function _handleClick(c, r) {
@@ -382,6 +396,7 @@ const FEBattle = (() => {
       if (enemy.dead) { setTimeout(step, 50); return; }
 
       S.activeEnemy = enemy.id; // 現在行動中の敵をハイライト
+      _cb.onUnitHover && _cb.onUnitHover(enemy);
 
       const targets = S.units.filter(u => u.side==='player' && !u.dead);
       if (!targets.length) { _endBattle(true); return; }
@@ -419,6 +434,7 @@ const FEBattle = (() => {
   function _finishEnemyPhase() {
     if (!S) return;
     S.activeEnemy = null;
+    _cb.onUnitHover && _cb.onUnitHover(null);
     if (!S.units.filter(u=>u.side==='enemy'&&!u.dead).length) { _endBattle(true); return; }
     S.phase = 'player';
     S.turnNum++;

@@ -21,35 +21,6 @@ const Scenes = (() => {
     });
   }
 
-  function statusBar() {
-    const allies = G.allies.filter(a => a.recruited);
-    return `
-    <div id="status-bar">
-      <span class="stat-chip">🏰 自陣 <span class="stat-val">${G.player.baseHp}/${G.player.baseMaxHp}</span></span>
-      <span class="stat-chip">💰 <span class="stat-val">${G.player.gold}G</span></span>
-      <span class="stat-chip">📋 情報 <span class="stat-val">${G.intel.length}</span></span>
-      <span class="stat-chip">🕊️ 仲間 <span class="stat-val">${allies.length}</span></span>
-      <span class="stat-chip">🔄 第 <span class="stat-val">${G.turn}</span> 戦</span>
-      <span class="game-title">情報戦略 ～Secret Hearts～</span>
-    </div>`;
-  }
-
-  function intelCardHtml(intel, showNew) {
-    const catClass = intel.cat === 'weakness' ? 'weakness' : intel.cat === 'own' ? 'own' : '';
-    return `
-    <div class="intel-card ${catClass} ${showNew && intel.isNew ? 'new' : ''}">
-      <div class="intel-hdr">
-        <span class="intel-name">${intel.name}</span>
-        <span class="intel-acc" style="color:${accColor(intel.accuracy)}">確度 ${intel.accuracy}%</span>
-      </div>
-      <div class="intel-body">${intel.content}</div>
-      <div class="intel-meta">情報源: ${intel.from} ／ 方法: ${intel.method}</div>
-      ${intel.unlocks && intel.unlocks.length > 0
-        ? `<div class="text-dim" style="margin-top:4px">📍 アンロック: ${intel.unlocks.map(id => getLocation(id)?.name || id).join('、')}</div>`
-        : ''}
-    </div>`;
-  }
-
   /* ======================================================
      タイトル画面
      ====================================================== */
@@ -104,964 +75,731 @@ const Scenes = (() => {
       G.storyIdx++;
       if (G.storyIdx >= STORY_SCENES.length) {
         G.storyIdx = 0;
-        G.phase = 'map';
-        setSystemDlg('ルミエル', '……まず「審判の法廷」に行きましょう。セラフィエルが処理命令の鍵を握っています。', '#B8E4FF');
+        G.phase = 'stage_select';
       }
       render();
     };
   }
 
   /* ======================================================
-     マップ画面
+     ステージ選択
      ====================================================== */
-  function renderMap() {
-    const prisoners = G.prisoners;
-    const allies    = G.allies.filter(a => a.recruited);
-    const locCards  = LOCATIONS.map(loc => {
-      const unlocked = isLocUnlocked(loc);
-      const cleared  = G.clearedLocs.has(loc.id);
-      const cls      = cleared ? 'cleared' : unlocked ? 'available' : 'locked';
-      const missing  = loc.reqIntel.filter(id => !hasIntel(id));
+  function renderStageSelect() {
+    const hpPct = G.player.hp / G.player.maxHp;
+    const root  = document.getElementById('root');
 
-      return `
-      <div class="loc-card ${cls}" data-loc-id="${loc.id}" data-available="${unlocked && !cleared}">
-        ${!unlocked ? '<div class="lock-badge">🔒</div>' : ''}
-        <div class="loc-icon">${loc.icon}</div>
-        <div class="loc-name">${loc.name}</div>
-        <div class="loc-desc">${loc.desc}</div>
-        ${cleared ? '<div class="chip">✅ 制圧済</div>' : ''}
-        ${!unlocked && missing.length > 0
-          ? `<div class="loc-req">必要情報: ${missing.map(id => INTEL_POOL.find(t=>t.id===id) ? INTEL_POOL.find(t=>t.id===id).name : id).join('、')}</div>`
-          : ''}
-        ${unlocked && !cleared
-          ? `<button class="btn btn-lavender btn-sm loc-sortie-btn" data-loc-id="${loc.id}">出撃</button>`
-          : ''}
-      </div>`;
-    }).join('');
-
-    document.getElementById('root').innerHTML = `
-    ${statusBar()}
-    <div id="scene-map">
-      <div class="map-content">
-        <div class="phase-hdr"><h2>🗺️ 世界地図</h2><span class="sub">情報を集めて拠点をアンロックせよ</span></div>
-
-        <div class="map-grid">${locCards}</div>
-
-        ${prisoners.length > 0 ? `
+    root.innerHTML = `
+    <div id="scene-stage-select" style="max-width:640px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:16px;font-family:sans-serif">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div>
-          <div class="section-label">🔗 捕虜（尋問待ち）</div>
-          <div class="prisoner-queue" id="prisoner-queue">
-            ${prisoners.map(id => {
-              const a = getAngel(id);
-              return `<button class="btn btn-pink prisoner-btn" data-angel-id="${id}">${a.emoji} ${a.name} を尋問する</button>`;
-            }).join('')}
-          </div>
-        </div>` : ''}
-
-        ${allies.length > 0 ? `
-        <div>
-          <div class="section-label">✨ 仲間になった天使</div>
-          <div class="ally-row">
-            ${allies.map(al => {
-              const a = getAngel(al.id);
-              return `<div class="ally-chip">${a.emoji} <strong>${a.name}</strong><span class="a-bonus">${a.recruitBonus}</span></div>`;
-            }).join('')}
-          </div>
-        </div>` : ''}
-
-        ${G.intel.length > 0 ? `
-        <div>
-          <div class="section-label" style="display:flex;justify-content:space-between;align-items:center">
-            📋 収集済み情報
-            <button class="btn btn-ghost btn-sm" id="btn-intel-view">一覧を見る</button>
-          </div>
-          ${G.intel.slice(-3).map(i => intelCardHtml(i, false)).join('')}
-        </div>` : ''}
-      </div>
-    </div>`;
-
-    // 捕虜ボタンを JS でバインド（onclick 属性を使わない）
-    const pq = document.getElementById('prisoner-queue');
-    if (pq) {
-      pq.querySelectorAll('.prisoner-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          Interrogation.begin(btn.dataset.angelId);
-        });
-      });
-    }
-
-    // 出撃ボタン
-    document.querySelectorAll('.loc-sortie-btn').forEach(btn => {
-      btn.addEventListener('click', e => {
-        e.stopPropagation();
-        App.openLocation(btn.dataset.locId);
-      });
-    });
-    document.querySelectorAll('.loc-card[data-available="true"]').forEach(card => {
-      card.addEventListener('click', () => App.openLocation(card.dataset.locId));
-    });
-
-    // 情報一覧
-    const intelViewBtn = document.getElementById('btn-intel-view');
-    if (intelViewBtn) intelViewBtn.addEventListener('click', () => { G.phase = 'intelView'; render(); });
-
-    // Dialogue toast at bottom if exists
-    const dlg = getDlg();
-    if (dlg.text) {
-      const toast = document.createElement('div');
-      toast.style.cssText = 'position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:10;width:90%;max-width:640px;';
-      toast.innerHTML = `
-      <div style="background:rgba(10,4,25,.95);border:1px solid var(--border);border-radius:14px;padding:12px 18px;backdrop-filter:blur(8px)">
-        ${dlg.speaker ? `<span style="font-size:12px;font-weight:700;color:${dlg.color};margin-bottom:4px;display:block">${dlg.speaker}</span>` : ''}
-        <div id="toast-text" style="font-size:14px;line-height:1.8">${dlg.text}</div>
-      </div>`;
-      document.body.appendChild(toast);
-      setTimeout(() => toast.remove(), 5000);
-    }
-  }
-
-  /* ======================================================
-     戦闘前ブリーフィング（ファイアーエムブレム式・仲間選択）
-     ====================================================== */
-  function renderPreBattle(locationId) {
-    const loc   = getLocation(locationId);
-    const angel = getAngel(loc.angelId);
-    const recruitedAllies = G.allies
-      .filter(a => a.recruited)
-      .map(a => getAngel(a.id))
-      .filter(Boolean);
-    const equipIds = [...new Set(G.inventory.filter(id => {
-      const d = getItemDef(id);
-      return d && d.cat === 'equipment' && !['gold_bonus','base_hp'].includes(d.effect);
-    }))];
-
-    const party = { allyIds: [], itemIds: [] };
-
-    // ポートレートパネル更新ヘルパー
-    function updatePortrait(char, isEnemy) {
-      const box   = document.getElementById('pre-portrait-box');
-      const img   = document.getElementById('pre-portrait-img');
-      const emoji = document.getElementById('pre-portrait-emoji');
-      const name  = document.getElementById('pre-portrait-name');
-      const title = document.getElementById('pre-portrait-title');
-      const desc  = document.getElementById('pre-portrait-desc');
-      const badge = document.getElementById('pre-portrait-badge');
-      if (!box) return;
-      box.style.background = char.bgGrad || 'linear-gradient(180deg,#1a0a2e,#2a1040)';
-      if (name)  { name.textContent = char.name; name.style.color = char.color || '#FFF'; }
-      if (title) title.textContent = char.title || '';
-      if (desc)  desc.textContent  = char.desc  || '';
-      if (badge) {
-        badge.textContent = isEnemy ? '🎯 交戦目標' : '✨ 出撃メンバー';
-        badge.style.background = isEnemy ? 'rgba(255,60,60,0.35)' : 'rgba(80,200,80,0.35)';
-      }
-      if (char.portrait) {
-        if (img)   { img.src = char.portrait; img.style.display = 'block'; }
-        if (emoji) emoji.style.display = 'none';
-      } else {
-        if (img)   img.style.display = 'none';
-        if (emoji) { emoji.textContent = char.emoji; emoji.style.display = 'flex'; }
-      }
-    }
-
-    function allyCardHtml(a) {
-      return `
-      <button class="btn btn-ghost ally-sel-btn" data-ally-id="${a.id}" style="
-        display:flex;align-items:center;gap:10px;padding:8px 14px;min-width:190px;
-        border:1px solid rgba(200,159,255,0.25);border-radius:10px;text-align:left;
-        transition:background 0.15s,border-color 0.15s">
-        <span style="font-size:22px">${a.emoji}</span>
-        <span>
-          <strong style="color:${a.color}">${a.name}</strong><br>
-          <span style="font-size:11px;color:var(--dim)">HP:${a.hp} 攻:${a.atk} 防:${a.def} 速:${a.spd}</span>
-        </span>
-      </button>`;
-    }
-
-    document.getElementById('root').innerHTML = `
-    ${statusBar()}
-    <div class="prebattle-overlay" style="overflow-y:auto;max-height:100vh;padding:12px 16px">
-      <div style="display:flex;align-items:flex-start;gap:18px;max-width:1100px;margin:0 auto">
-
-        <!-- ポートレート列 -->
-        <div style="width:210px;flex-shrink:0;position:sticky;top:12px">
-          <div id="pre-portrait-box" style="background:${angel.bgGrad||'#1a0a2e'};border-radius:16px;overflow:hidden;position:relative;display:flex;flex-direction:column;align-items:center;min-height:260px">
-            ${angel.portrait
-              ? `<img id="pre-portrait-img" src="${angel.portrait}" alt="${angel.name}"
-                   style="width:100%;max-height:260px;object-fit:cover;object-position:top center"
-                   onerror="this.style.display='none';document.getElementById('pre-portrait-emoji').style.display='flex'">`
-              : ''}
-            <div id="pre-portrait-emoji" style="font-size:80px;display:${angel.portrait?'none':'flex'};align-items:center;justify-content:center;padding:20px 0;width:100%">${angel.emoji}</div>
-            <div id="pre-portrait-badge" style="position:absolute;top:8px;left:8px;padding:3px 8px;background:rgba(255,60,60,0.35);border-radius:6px;font-size:11px;font-weight:bold;color:#FFF">🎯 交戦目標</div>
-            <div style="padding:10px 12px;background:rgba(0,0,0,0.65);width:100%;box-sizing:border-box;text-align:center">
-              <div id="pre-portrait-name" style="font-weight:bold;font-size:15px;color:${angel.color||'#FFF'}">${angel.name}</div>
-              <div id="pre-portrait-title" style="font-size:11px;color:var(--dim);margin-top:2px">${angel.title}</div>
-            </div>
-          </div>
-          <div id="pre-portrait-desc" style="margin-top:10px;padding:10px;background:rgba(255,255,255,0.04);border-radius:10px;font-size:11px;line-height:1.7;color:#BBA8CC">${angel.desc||''}</div>
-          <div style="margin-top:10px;padding:10px;background:rgba(255,80,80,0.06);border-radius:10px;font-size:12px">
-            <div style="color:var(--dim);margin-bottom:5px;font-size:11px">交戦目標ステータス</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
-              <span style="color:#aaa">HP</span><span style="color:#FFF">${angel.hp}</span>
-              <span style="color:#aaa">攻撃</span><span style="color:#FFF">${angel.atk}</span>
-              <span style="color:#aaa">防御</span><span style="color:#FFF">${angel.def}</span>
-              <span style="color:#aaa">速度</span><span style="color:#FFF">${angel.spd}</span>
-              <span style="color:#aaa">護衛</span><span style="color:#FFF">9体</span>
-            </div>
-          </div>
+          <h2 style="margin:0;font-size:20px;color:#C89FFF">⚔️ 作戦マップ</h2>
+          <div style="font-size:12px;color:#888;margin-top:2px">ステージ ${G.stage + 1} / ${STAGE_ORDER.length}</div>
         </div>
-
-        <!-- メイン列 -->
-        <div class="prebattle-box" style="flex:1;min-width:0;max-width:720px">
-          <h2 style="margin-bottom:6px">⚔️ 出撃ブリーフィング — ${loc.name}</h2>
-          <div style="font-size:12px;color:var(--dim);margin-bottom:14px">
-            ターン制。指揮官を守りながら目標のHPを30%以下まで削り、隣接して捕縛せよ。
+        <div style="text-align:right">
+          <div style="font-size:12px;color:#888;margin-bottom:3px">自陣HP</div>
+          <div style="width:140px;height:10px;background:#1a1a2e;border-radius:5px;overflow:hidden">
+            <div style="height:100%;width:${Math.max(0, hpPct * 100).toFixed(1)}%;background:${hpPct > .5 ? '#4CFF7A' : hpPct > .25 ? '#FFD700' : '#FF4444'};border-radius:5px"></div>
           </div>
+          <div style="font-size:11px;color:#CCC;margin-top:2px">${G.player.hp} / ${G.player.maxHp}</div>
+        </div>
+      </div>
 
-          <div class="prebattle-combatants" style="margin-bottom:14px">
-            <div class="combatant-card player">
-              <div class="cc-emoji">${PLAYER_UNIT.emoji}</div>
-              <div class="cc-name">${PLAYER_UNIT.name}</div>
-              <div class="cc-stats">
-                <div class="stat-row"><span>HP</span><span class="sv">${PLAYER_UNIT.hp}</span></div>
-                <div class="stat-row"><span>攻撃</span><span class="sv">${PLAYER_UNIT.atk}</span></div>
-                <div class="stat-row"><span>防御</span><span class="sv">${PLAYER_UNIT.def}</span></div>
-                <div class="stat-row"><span>移動</span><span class="sv">${PLAYER_UNIT.mov}</span></div>
+      <div style="background:rgba(184,228,255,0.08);border:1px solid rgba(184,228,255,0.2);border-radius:10px;padding:10px 14px;display:flex;align-items:center;gap:12px">
+        <span style="font-size:28px">📖</span>
+        <div style="font-size:12px;color:#CCC">"${_lumielHint()}" <span style="color:#B8E4FF">— ルミエル</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${STAGE_ORDER.map((locId, i) => {
+          const loc   = getLocation(locId);
+          const angel = loc ? getAngel(loc.angelId) : null;
+          if (!angel) return '';
+          const isCleared = i < G.stage;
+          const isCurrent = i === G.stage;
+          const isLocked  = i > G.stage;
+          return `
+          <div style="background:${isCurrent ? 'rgba(200,159,255,0.12)' : isCleared ? 'rgba(80,200,100,0.08)' : 'rgba(255,255,255,0.03)'};border:1px solid ${isCurrent ? 'rgba(200,159,255,0.4)' : isCleared ? 'rgba(80,200,100,0.3)' : 'rgba(255,255,255,0.08)'};border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:14px;opacity:${isLocked ? '.35' : '1'}">
+            <span style="font-size:40px;filter:${isLocked ? 'grayscale(1)' : 'drop-shadow(0 0 8px ' + angel.color + ')'}">${angel.emoji}</span>
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-weight:bold;font-size:14px;color:${isCleared ? '#4CFF7A' : isCurrent ? angel.color : '#888'}">${i + 1}. ${angel.name}</span>
+                <span style="font-size:10px;color:#666">${angel.title}</span>
+                ${isCleared ? '<span style="font-size:11px;color:#4CFF7A;margin-left:auto">✅ 捕縛済</span>' : ''}
+                ${isCurrent ? '<span style="font-size:11px;color:#C89FFF;margin-left:auto">▶ 現在</span>' : ''}
+                ${isLocked  ? '<span style="font-size:11px;color:#555;margin-left:auto">🔒</span>' : ''}
               </div>
+              <div style="font-size:11px;color:#666;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${loc.name} — ${angel.desc.substring(0, 50)}</div>
             </div>
-          </div>
-
-          ${recruitedAllies.length > 0 ? `
-          <div style="margin-bottom:14px">
-            <div class="section-label">✨ 仲間を選ぶ（最大3人）</div>
-            <div id="ally-select" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">
-              ${recruitedAllies.map(allyCardHtml).join('')}
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              ${isCurrent ? '<button class="btn btn-lavender btn-sm" id="btn-stage-enter">出撃</button>' : ''}
+              ${isCleared ? `<button class="btn btn-pink btn-sm" data-inq="${angel.id}">尋問</button>` : ''}
             </div>
-          </div>` : `<div style="color:var(--dim);font-size:13px;margin:10px 0">
-            仲間はまだいない。天使を尋問して招集しよう。
-          </div>`}
-
-          ${equipIds.length > 0 ? `
-          <div style="margin-bottom:14px">
-            <div class="section-label">🎒 装備アイテムを持っていく（複数可）</div>
-            <div id="item-select" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
-              ${equipIds.map(id => {
-                const d = getItemDef(id);
-                return `<button class="btn btn-ghost item-sel-btn" data-item-id="${id}" style="
-                  padding:6px 12px;border:1px solid rgba(100,220,100,0.25);border-radius:8px;text-align:left">
-                  ${d.icon} <strong>${d.name}</strong>
-                  <span style="font-size:11px;color:var(--dim);display:block">${d.desc}</span>
-                </button>`;
-              }).join('')}
-            </div>
-          </div>` : ''}
-
-          <div class="row" style="justify-content:center;gap:14px;margin-top:18px">
-            <button class="btn btn-lavender btn-lg" id="btn-fe-sortie">⚔️ 出撃！（仲間 0人）</button>
-            <button class="btn btn-ghost" id="btn-cancel-battle">← キャンセル</button>
-          </div>
-        </div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
 
-    // 仲間ボタン — クリック＆ホバーでポートレート切替
-    document.getElementById('ally-select')?.querySelectorAll('.ally-sel-btn').forEach(btn => {
-      const a = recruitedAllies.find(x => x.id === btn.dataset.allyId);
-      btn.addEventListener('click', () => {
-        const id  = btn.dataset.allyId;
-        const idx = party.allyIds.indexOf(id);
-        if (idx >= 0) {
-          party.allyIds.splice(idx, 1);
-          btn.style.background  = '';
-          btn.style.borderColor = 'rgba(200,159,255,0.25)';
-          const last = party.allyIds.length > 0 ? recruitedAllies.find(x => x.id === party.allyIds[party.allyIds.length-1]) : null;
-          updatePortrait(last || angel, !last);
-        } else if (party.allyIds.length < 3) {
-          party.allyIds.push(id);
-          btn.style.background  = 'rgba(200,159,255,0.2)';
-          btn.style.borderColor = 'rgba(200,159,255,0.7)';
-          if (a) updatePortrait(a, false);
-        }
-        const sortieBtn = document.getElementById('btn-fe-sortie');
-        if (sortieBtn) sortieBtn.textContent = `⚔️ 出撃！（仲間 ${party.allyIds.length}人）`;
-      });
-      btn.addEventListener('mouseenter', () => { if (a) updatePortrait(a, false); });
-      btn.addEventListener('mouseleave', () => {
-        const last = party.allyIds.length > 0 ? recruitedAllies.find(x => x.id === party.allyIds[party.allyIds.length-1]) : null;
-        updatePortrait(last || angel, !last);
-      });
-    });
-
-    // 装備アイテムボタン
-    document.getElementById('item-select')?.querySelectorAll('.item-sel-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id  = btn.dataset.itemId;
-        const idx = party.itemIds.indexOf(id);
-        if (idx >= 0) {
-          party.itemIds.splice(idx, 1);
-          btn.style.background  = '';
-          btn.style.borderColor = 'rgba(100,220,100,0.25)';
-        } else {
-          party.itemIds.push(id);
-          btn.style.background  = 'rgba(100,220,100,0.15)';
-          btn.style.borderColor = 'rgba(100,220,100,0.7)';
-        }
-      });
-    });
-
-    document.getElementById('btn-fe-sortie').addEventListener('click', () => App.startBattle(locationId, party));
-    document.getElementById('btn-cancel-battle').addEventListener('click', () => { G.phase = 'map'; render(); });
-  }
-
-  /* ======================================================
-     ファイアーエムブレム式ターン制戦闘画面
-     ====================================================== */
-
-  function _removeFEHUD() {
-    const el = document.getElementById('fe-hud');
-    if (el) el.remove();
-  }
-
-  function renderBattle(locationId, partyConfig) {
-    const loc   = getLocation(locationId);
-    const angel = getAngel(loc.angelId);
-    partyConfig = partyConfig || { allyIds: [], itemIds: [] };
-
-    recalcDropBoost();
-
-    // キャンバスを準備（前の戦闘でDOMから削除されている場合は再作成）
-    let canvas = document.getElementById('battle-canvas');
-    if (!canvas) {
-      canvas = document.createElement('canvas');
-      canvas.id = 'battle-canvas';
-      document.body.appendChild(canvas);
-    }
-    canvas.style.cssText = [
-      'position:fixed','top:0','left:0','width:100vw',
-      'height:calc(100vh - 60px)','z-index:15','display:block','cursor:crosshair',
-    ].join(';') + ';';
-
-    document.getElementById('root').innerHTML =
-      '<div style="position:fixed;inset:0;background:#0a1520;z-index:5"></div>';
-
-    _removeFEHUD();
-
-    // 仲間ユニット組み立て
-    const alliedAngels = (partyConfig.allyIds || [])
-      .map(id => getAngel(id)).filter(Boolean)
-      .map(a => ({
-        id:a.id, name:a.name, emoji:a.emoji, color:a.color,
-        hp:a.hp, atk:a.atk, def:a.def, spd:a.spd,
-        mov:a.mov||4, rng:a.rng||1,
-      }));
-
-    // 装備効果組み立て
-    const equipEffects = [];
-    for (const itemId of (partyConfig.itemIds || [])) {
-      const d = getItemDef(itemId);
-      if (d && d.effect) equipEffects.push({ type: d.effect, value: d.value });
-    }
-
-    // FE HUD（body直下に追加）
-    const hudEl = document.createElement('div');
-    hudEl.id = 'fe-hud';
-    hudEl.style.cssText = [
-      'position:fixed','bottom:0','left:0','right:0','z-index:100',
-      'display:flex','align-items:center','gap:10px','padding:8px 12px',
-      'background:rgba(8,4,20,0.97)','border-top:1px solid rgba(200,159,255,0.25)',
-      'flex-wrap:wrap','min-height:56px','font-size:13px',
-    ].join(';') + ';';
-    hudEl.innerHTML = `
-      <div id="fe-phase" style="padding:4px 10px;background:rgba(60,120,255,0.2);border-radius:6px;font-weight:bold;color:#80B0FF;white-space:nowrap">
-        プレイヤーフェーズ　ターン 1
-      </div>
-      <div id="fe-unit-info" style="flex:1;min-width:160px;color:#CCC">
-        <span style="color:var(--dim)">ユニットを選択してください</span>
-      </div>
-      <div id="fe-action-btns" style="display:flex;gap:6px"></div>
-      <div id="fe-item-btns"   style="display:flex;gap:6px"></div>
-      <div id="fe-enemy-count" style="color:var(--dim);white-space:nowrap">敵: 10体</div>
-      <button id="fe-retreat-btn" style="padding:5px 12px;background:rgba(200,60,60,0.3);border:1px solid rgba(200,60,60,0.5);color:#FF9090;border-radius:6px;cursor:pointer">撤退</button>`;
-    document.body.appendChild(hudEl);
-
-    hudEl.querySelector('#fe-retreat-btn').addEventListener('click', () => {
-      FEBattle.stopBattle();
-      _removeFEHUD();
-      document.getElementById('battle-canvas')?.remove();
-      G.phase = 'map';
-      setSystemDlg('システム', '撤退した。また準備を整えて挑もう。', 'var(--gold)');
+    document.getElementById('btn-stage-enter')?.addEventListener('click', () => {
+      G.phase = 'stage_prep';
       render();
     });
 
-    // 戦闘アイテムボタン
-    const battleItems    = G.inventory.filter(id => { const d = getItemDef(id); return d && d.cat === 'battle'; });
-    const uniqueBattleIds = [...new Set(battleItems)];
-    const itemBtnsEl     = hudEl.querySelector('#fe-item-btns');
-    uniqueBattleIds.forEach(id => {
-      const d   = getItemDef(id);
-      const cnt = battleItems.filter(x => x === id).length;
-      const btn = document.createElement('button');
-      btn.textContent = `${d.icon} ${d.name} ×${cnt}`;
-      btn.style.cssText = 'padding:4px 10px;background:rgba(255,215,0,0.15);border:1px solid rgba(255,215,0,0.3);border-radius:6px;color:#FFD700;cursor:pointer;font-size:12px';
+    document.querySelectorAll('[data-inq]').forEach(btn => {
       btn.addEventListener('click', () => {
-        if (!removeItemFromInventory(id)) return;
-        FEBattle.useBattleItem(id);
-        const rem = G.inventory.filter(x => x === id).length;
-        if (rem <= 0) btn.remove();
-        else btn.textContent = `${d.icon} ${d.name} ×${rem}`;
+        G._interrogatingId = btn.dataset.inq;
+        G.phase = 'interrogation';
+        render();
       });
-      itemBtnsEl.appendChild(btn);
-    });
-
-    // FEBattle 起動
-    FEBattle.startBattle(canvas, {
-      commanderUnit: PLAYER_UNIT,
-      allies:        alliedAngels,
-      equipEffects,
-      enemyLayout:   loc.enemyLayout,
-      angel: {
-        name:angel.name, emoji:angel.emoji, color:angel.color,
-        hp:angel.hp, atk:angel.atk, def:angel.def, spd:angel.spd,
-        mov:angel.mov||3, rng:angel.rng||1,
-      },
-    }, {
-      onHUDUpdate({ phase, turnNum, units, selected, pendingMove, canCapture, enemyCount }) {
-        const phaseEl  = document.getElementById('fe-phase');
-        const unitInfo = document.getElementById('fe-unit-info');
-        const actionEl = document.getElementById('fe-action-btns');
-        const cntEl    = document.getElementById('fe-enemy-count');
-
-        if (phaseEl) {
-          const isPlayer = phase === 'player';
-          phaseEl.style.background = isPlayer ? 'rgba(60,120,255,0.2)' : 'rgba(200,40,40,0.2)';
-          phaseEl.style.color      = isPlayer ? '#80B0FF' : '#FF8080';
-          phaseEl.textContent = `${isPlayer ? '▶ プレイヤー' : '🔴 敵'}フェーズ　ターン ${turnNum}`;
-        }
-        if (cntEl) cntEl.textContent = `敵: ${enemyCount}体`;
-
-        if (unitInfo && selected) {
-          const st   = FEBattle.getState();
-          const unit = st ? st.units.find(u => u.id === selected && !u.dead) : null;
-          if (unit) {
-            const hpColor = unit.hp/unit.maxHp > 0.5 ? '#4CFF7A' : unit.hp/unit.maxHp > 0.25 ? '#FFD700' : '#FF4444';
-            unitInfo.innerHTML = `
-              <span style="margin-right:8px">${unit.emoji} <strong>${unit.name}</strong></span>
-              <span style="color:${hpColor}">HP ${unit.hp}/${unit.maxHp}</span>
-              <span style="margin-left:8px;color:var(--dim)">攻:${unit.atk} 防:${unit.def} 速:${unit.spd}</span>`;
-          }
-        } else if (unitInfo) {
-          unitInfo.innerHTML = '<span style="color:var(--dim)">ユニットを選択してください</span>';
-        }
-
-        if (actionEl) {
-          actionEl.innerHTML = '';
-          if (phase === 'player') {
-            if (canCapture) {
-              const capBtn = _makeHudBtn('🔗 捕縛！', '#FFD700', 'rgba(255,215,0,0.3)', '#FFD700');
-              capBtn.style.fontWeight = 'bold';
-              capBtn.onclick = () => FEBattle.doCapture();
-              actionEl.appendChild(capBtn);
-            }
-            if (pendingMove) {
-              const waitBtn = _makeHudBtn('待機', '#AAB8FF', 'rgba(100,100,200,0.3)', 'rgba(100,100,200,0.5)');
-              waitBtn.onclick = () => FEBattle.selectWait();
-              actionEl.appendChild(waitBtn);
-            }
-            const endBtn = _makeHudBtn('ターン終了 ▶', '#80FF80', 'rgba(60,200,60,0.2)', 'rgba(60,200,60,0.4)');
-            endBtn.onclick = () => FEBattle.endPlayerTurn();
-            actionEl.appendChild(endBtn);
-          }
-        }
-      },
-
-      onBossCaptureable({ boss }) {
-        setSystemDlg('捕縛チャンス！', `${boss.name}のHPが30%以下！隣接して「捕縛」ボタンを押せ！`, 'var(--gold)');
-      },
-
-      onPlayerPhaseStart({ turn }) {
-        setSystemDlg('フェーズ', `ターン ${turn}　プレイヤーフェーズ`, 'var(--lavender)');
-      },
-
-      onAllActed() {
-        setSystemDlg('行動完了', '全ユニットが行動済み。「ターン終了」ボタンを押してください。', 'var(--green)');
-      },
-
-      onBattleEnd({ victory }) {
-        _removeFEHUD();
-        document.getElementById('battle-canvas')?.remove();
-
-        if (victory) {
-          const intelIds = G.intel.filter(i => i.isTrue).map(i => i.id);
-          const drops    = rollDrops(loc, intelIds, G.dropBoostMult);
-          applyDrops(drops);
-          G._battleDrops = drops;
-          onCapture(locationId, angel.id);
-        } else {
-          G.player.baseHp = Math.max(0, G.player.baseHp - 30);
-          const defeatEl  = document.createElement('div');
-          defeatEl.id     = 'fe-defeat-screen';
-          defeatEl.style.cssText = 'position:fixed;inset:0;background:rgba(10,4,25,0.97);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px';
-          defeatEl.innerHTML = `
-            <div style="font-size:52px">💀</div>
-            <h2 style="color:#FF5E7A;font-size:28px;margin:0">敗北</h2>
-            <p style="color:#aaa;font-size:15px;text-align:center;max-width:360px">
-              指揮官が倒された……。<br>
-              自陣HP: <span style="color:#FF5E7A">${G.player.baseHp}/${G.player.baseMaxHp}</span>
-            </p>
-            <button id="btn-fe-defeat-back" style="padding:12px 32px;background:linear-gradient(135deg,#7B5EA7,#C89FFF);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:bold;cursor:pointer">
-              マップへ戻る
-            </button>`;
-          document.body.appendChild(defeatEl);
-          document.getElementById('btn-fe-defeat-back').addEventListener('click', () => {
-            defeatEl.remove();
-            setSystemDlg('敗北', '指揮官が倒された……態勢を立て直せ。', 'var(--red)');
-            G.phase = 'map';
-            render();
-          });
-        }
-      },
     });
   }
 
-  function _makeHudBtn(label, color, bg, border) {
-    const b = document.createElement('button');
-    b.textContent = label;
-    b.style.cssText = `padding:5px 12px;background:${bg};border:1px solid ${border};border-radius:6px;color:${color};cursor:pointer;font-size:12px`;
-    return b;
-  }
-
-  function onCapture(locationId, angelId) {
-    G.clearedLocs.add(locationId);
-    if (!G.prisoners.includes(angelId)) G.prisoners.push(angelId);
-    G.turn++;
-
-    const angel = getAngel(angelId);
-    // Retaliation
-    const retDmg = Math.round(20 + Math.random() * 20);
-    G.player.baseHp = Math.max(0, G.player.baseHp - retDmg);
-
-    G.phase = 'capture';
-    G._capturedId = angelId;
-    G._retDmg     = retDmg;
-    render();
+  function _lumielHint() {
+    const hints = [
+      '次はセラフィエルです。感情に訴えると揺れます……。',
+      'ミリエルは沈黙を怖がります。私も知っていました、昔は。',
+      'アリュシアは読めない人。でも本物の感情には弱いはず。',
+      'エルティアは私の元上司です。計算外の変数になってやりましょう。',
+      'サンクティアの笑顔は……信じないでください。',
+      'ヴェルナは記憶の中で生きています。現実を見せれば…',
+      'ラグナリア……もう、止められるかどうか。でも、やるしかない。',
+    ];
+    return hints[Math.min(G.stage, hints.length - 1)];
   }
 
   /* ======================================================
-     捕縛シーン
+     ステージ準備（情報収集セッション）
      ====================================================== */
-  function renderCapture() {
-    const angel = getAngel(G._capturedId);
-    document.getElementById('root').innerHTML = `
-    ${statusBar()}
-    <div class="capture-prompt">
-      <div class="capture-box">
-        <div class="capture-emoji">${angel.emoji}</div>
-        <div class="capture-name" style="color:${angel.color}">${angel.name}を捕縛！</div>
-        <div style="font-size:14px;color:var(--dim);margin:12px 0">
-          ${angel.title}を確保。尋問が可能になった。<br>
-          <span style="color:var(--red)">⚡ 敵の報復: 自陣に ${G._retDmg} ダメージ</span><br>
-          <span style="color:var(--dim)">自陣HP: ${G.player.baseHp}/${G.player.baseMaxHp}</span>
-          ${G._battleDrops && G._battleDrops.length > 0 ? `
-          <div style="margin-top:10px;padding:10px;background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);border-radius:8px">
-            <div style="color:#FFD700;font-weight:bold;margin-bottom:6px">📦 ドロップアイテム</div>
-            ${G._battleDrops.map(id => { const d=getItemDef(id); return d?`<span style="margin:3px;padding:3px 8px;background:rgba(255,255,255,0.08);border-radius:5px;font-size:13px">${d.icon} ${d.name}</span>`:''; }).join('')}
-          </div>` : ''}
+  function renderStagePrep() {
+    const locId = STAGE_ORDER[G.stage];
+    const loc   = getLocation(locId);
+    const angel = loc ? getAngel(loc.angelId) : null;
+    if (!angel) { G.phase = 'stage_select'; render(); return; }
+
+    if (!G.stageWeaknesses.length) {
+      const shuffled = [...ELEM_KEYS].sort(() => Math.random() - 0.5);
+      G.stageWeaknesses    = shuffled.slice(0, Math.random() < 0.4 ? 2 : 1);
+      G.revealedWeaknesses = [];
+      G.sessionsLeft       = 3 + Math.floor(Math.random() * 3); // 3〜5回
+    }
+
+    const root = document.getElementById('root');
+    root.innerHTML = `
+    <div id="scene-stage-prep" style="max-width:520px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:16px;font-family:sans-serif">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost btn-sm" id="btn-prep-back">← 戻る</button>
+        <span style="font-size:12px;color:#888">ステージ ${G.stage + 1} — 出撃前準備</span>
+      </div>
+
+      <div style="background:rgba(0,0,0,0.4);border:1px solid ${angel.color}44;border-radius:16px;overflow:hidden">
+        <div style="background:${angel.bgGrad || 'rgba(50,20,80,0.6)'};padding:24px;display:flex;flex-direction:column;align-items:center;gap:8px">
+          <div style="font-size:72px;filter:drop-shadow(0 0 20px ${angel.color})">${angel.emoji}</div>
+          <div style="font-size:18px;font-weight:bold;color:${angel.color}">${angel.name}</div>
+          <div style="font-size:12px;color:rgba(255,255,255,0.6)">${angel.title}</div>
         </div>
-        <div class="row" style="justify-content:center;gap:12px;margin-top:16px">
-          <button class="btn btn-pink" id="btn-do-interrogate">🗣️ すぐ尋問する</button>
-          <button class="btn btn-ghost" id="btn-back-to-map">🗺️ マップへ戻る</button>
+        <div style="padding:12px 16px;background:rgba(0,0,0,0.3)">
+          <div style="font-size:12px;color:#AAA;line-height:1.7">${angel.desc.substring(0, 100)}…</div>
         </div>
       </div>
-    </div>`;
 
-    document.getElementById('btn-do-interrogate').addEventListener('click', () => {
-      G._battleDrops = null;
-      Interrogation.begin(angel.id);
-    });
-    document.getElementById('btn-back-to-map').addEventListener('click', () => {
-      G._battleDrops = null;
-      G.phase = 'map'; render();
-    });
-  }
-
-  /* ======================================================
-     尋問シーン
-     ====================================================== */
-  function renderInterrogation() {
-    const iq    = Interrogation.getState();
-    const angelId = G.interrogation?.angelId;
-    if (!angelId) { G.phase = 'map'; render(); return; }
-
-    const angel = getAngel(angelId);
-    const ally  = getAllyEntry(angelId);
-    const dlg   = getDlg();
-    const trust = ally.trust;
-    const fear  = ally.fear || 0;
-
-    // Emotion → portrait class
-    const emoCls = dlg.emotionClass || '';
-
-    document.getElementById('root').innerHTML = `
-    ${statusBar()}
-    <div id="scene-interrogation">
-      <div class="interro-layout">
-
-        <!-- 左：ポートレート + メーター -->
-        <div class="interro-portrait-col">
-          <div class="portrait-frame ${emoCls}" id="portrait-frame">
-            <div class="portrait-bg" style="background:${angel.bgGrad}"></div>
-            <div class="emotion-badge" id="emotion-badge">${emotionEmoji(emoCls)}</div>
-            ${angel.portrait
-              ? `<img class="portrait-img" src="${angel.portrait}"
-                   onerror="this.style.display='none';document.getElementById('portrait-emoji-fb-${angelId}').style.display='block'"
-                   alt="${angel.name}">
-                 <div class="portrait-emoji" id="portrait-emoji-fb-${angelId}" style="display:none">${angel.emoji}</div>`
-              : `<div class="portrait-emoji">${angel.emoji}</div>`}
-            <div class="portrait-nameplate">
-              <div class="pn-name" style="color:${angel.color}">${angel.name}</div>
-              <div class="pn-title">${angel.title}</div>
-            </div>
-          </div>
-
-          <div class="meter-group">
-            <div class="section-label">好感度</div>
-            <div class="meter-row">
-              <div class="meter-label">
-                <span class="m-name">信頼度</span>
-                <span class="m-val" style="color:var(--green)">${trust}%</span>
-              </div>
-              <div class="meter-bar-wrap"><div class="meter-fill fill-trust" style="width:${trust}%"></div></div>
-            </div>
-            <div class="meter-row">
-              <div class="meter-label">
-                <span class="m-name">恐怖度</span>
-                <span class="m-val" style="color:var(--red)">${fear}%</span>
-              </div>
-              <div class="meter-bar-wrap"><div class="meter-fill fill-fear" style="width:${fear}%"></div></div>
-            </div>
-          </div>
-
-          <div style="font-size:13px;color:var(--dim);text-align:center">
-            <div style="color:${angel.color};font-size:18px;letter-spacing:2px">${relHeart(trust)}</div>
-            尋問 ${ally.sessions || 0} 回目
-          </div>
-
-          <button class="btn btn-ghost btn-sm" id="btn-leave-interro">← マップへ戻る</button>
+      <div style="background:rgba(10,4,25,0.8);border:1px solid rgba(200,159,255,0.2);border-radius:12px;padding:14px 16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:13px;font-weight:bold;color:#C89FFF">🔍 情報収集</span>
+          <span style="font-size:13px;font-weight:bold;color:${G.sessionsLeft > 0 ? '#FFD700' : '#666'}">残り ${G.sessionsLeft} 回</span>
         </div>
-
-        <!-- 中央：台詞 + トピック一覧 -->
-        <div class="interro-center-col">
-          <div class="interro-dlg-area">
-            ${dlg.speaker ? `<div class="dlg-speaker-plate" style="background:${dlg.color};color:#1a0a2e">${dlg.speaker}</div>` : ''}
-            <div class="dlg-body" id="dlg-body">${dlg.text}</div>
-          </div>
-
-          <div class="interro-topics" id="interro-topics">
-            <div class="topic-section-label">── 話題を選ぶ ──</div>
-            ${Object.entries(angel.topics).map(([key, topic]) => {
-              const minReq = topic.minTrustRequired || 0;
-              const locked = trust < minReq;
-              const revealed = ally.revealedTopics ? ally.revealedTopics.has(key) : false;
-              const selected = iq ? iq.selectedTopic === key : false;
-              return `
-              <button class="topic-btn ${locked ? 'locked' : ''} ${revealed ? 'revealed' : ''} ${selected ? 'selected' : ''}"
-                data-topic-key="${key}" ${locked ? 'disabled' : ''}>
-                <span class="t-label">${topic.icon || '💬'} ${topic.label}</span>
-                <span>
-                  ${locked ? `<span class="t-trust-req">🔒 信頼度 ${minReq} 必要</span>` : ''}
-                  ${revealed ? '<span class="t-check">✓</span>' : ''}
-                </span>
-              </button>`;
-            }).join('')}
-          </div>
-
-          <!-- 既知情報チップ -->
-          <div class="knowledge-log">
-            <span class="kl-label">入手済:</span>
-            ${G.intel.filter(i => (angel.knownIntel ? angel.knownIntel.includes(i.id) : false) || i.id === angel.weaknessId)
-              .map(i => `<span class="kl-chip">✓ ${i.name}</span>`).join('') || '<span class="text-dim">なし</span>'}
+        <div style="font-size:11px;color:#888;margin-bottom:8px">⚠️ 弱点属性スキルは通常スキルの約1.6倍のダメージ。非弱点でも通常攻撃より強い。</div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:#666;margin-bottom:5px">判明した弱点:</div>
+          <div style="display:flex;gap:8px;min-height:28px;align-items:center;flex-wrap:wrap">
+            ${G.revealedWeaknesses.length
+              ? G.revealedWeaknesses.map(e => `<span style="font-size:18px;filter:drop-shadow(0 0 6px ${ELEM_DATA[e].color})">${ELEM_DATA[e].icon} <span style="font-size:13px;color:${ELEM_DATA[e].color}">${ELEM_DATA[e].name}</span></span>`).join('')
+              : '<span style="font-size:11px;color:#444">まだ何も判明していない</span>'}
           </div>
         </div>
-
-        <!-- 右：尋問方法 -->
-        <div class="interro-method-col">
-          <div class="method-header">── 尋問方法 ──</div>
-          <div id="method-list">
-          ${METHODS.map(m => {
-            const canAfford = !m.cost || m.cost <= G.player.gold;
-            const selected  = iq ? iq.selectedMethod === m.id : false;
-            return `
-            <button class="method-btn ${selected ? 'selected' : ''}" data-method-id="${m.id}"
-              ${!canAfford ? 'disabled' : ''}>
-              <div class="mb-icon">${m.icon}</div>
-              <div class="mb-name">${m.name}</div>
-              ${m.cost ? `<div class="mb-cost">💰 ${m.cost}G</div>` : ''}
-              <div class="mb-effect">
-                <span class="pos">${m.posText}</span>
-                ${m.negText ? `<br><span class="neg">${m.negText}</span>` : ''}
-                ${!canAfford ? '<br><span class="neg">ゴールド不足</span>' : ''}
-              </div>
+        ${G.sessionsLeft > 0 ? `
+        <div style="font-size:11px;color:#888;margin-bottom:8px">属性プローブを選択（1回消費）:</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+          ${ELEM_KEYS.map(e => {
+            const ed      = ELEM_DATA[e];
+            const already = G.revealedWeaknesses.includes(e);
+            return `<button class="elem-probe-btn" data-elem="${e}" style="padding:8px 4px;background:rgba(255,255,255,0.04);border:1px solid ${ed.color}55;border-radius:8px;color:${ed.color};font-size:13px;cursor:pointer;${already ? 'opacity:0.3;cursor:default' : ''}"${already ? ' disabled' : ''}>
+              ${ed.icon} ${ed.name}
             </button>`;
           }).join('')}
-          </div>
-
-          <!-- 尋問アイテムセクション -->
-          ${(() => {
-            const interroItems = G.inventory.filter(id => { const d=getItemDef(id); return d&&d.cat==='interrogation'; });
-            const uniqueIds    = [...new Set(interroItems)];
-            if (uniqueIds.length === 0) return '';
-            return `<div class="method-header" style="margin-top:10px">── 尋問アイテム ──</div>
-              <div id="interro-item-list" style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0">
-              ${uniqueIds.map(id=>{
-                const d=getItemDef(id);
-                const cnt=interroItems.filter(x=>x===id).length;
-                return `<button class="interro-item-btn" data-item-id="${id}" style="
-                  display:flex;align-items:center;gap:6px;padding:6px 10px;
-                  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.15);
-                  border-radius:8px;cursor:pointer;font-size:12px;color:#E8E0F8;
-                  " title="${d.desc}">
-                  ${d.icon} ${d.name} ×${cnt}
-                </button>`;
-              }).join('')}
-              </div>`;
-          })()}
-
-          <div class="exec-area">
-            <button class="btn btn-pink btn-full" id="btn-execute"
-              ${(!iq || !iq.selectedTopic || !iq.selectedMethod) ? 'disabled' : ''}>
-              実行する ▶
-            </button>
-          </div>
-        </div>
+        </div>` : '<div style="text-align:center;font-size:12px;color:#FF8888;padding:8px 0">情報収集の機会はなくなった</div>'}
       </div>
+
+      <button class="btn btn-pink btn-lg" id="btn-battle-start">⚔️ 戦闘開始！</button>
     </div>`;
 
-    // ---- JS バインド ----
-    document.getElementById('btn-leave-interro').addEventListener('click', () => {
-      Interrogation.leaveInterrogation();
-    });
+    document.getElementById('btn-prep-back')?.addEventListener('click', () => { G.phase = 'stage_select'; render(); });
+    document.getElementById('btn-battle-start')?.addEventListener('click', () => _startRPGBattle());
 
-    document.getElementById('interro-topics').querySelectorAll('.topic-btn:not([disabled])').forEach(btn => {
-      btn.addEventListener('click', () => Interrogation.selectTopic(btn.dataset.topicKey));
-    });
-
-    document.getElementById('method-list').querySelectorAll('.method-btn:not([disabled])').forEach(btn => {
-      btn.addEventListener('click', () => Interrogation.selectMethod(btn.dataset.methodId));
-    });
-
-    document.getElementById('btn-execute').addEventListener('click', () => {
-      Interrogation.execute();
-    });
-
-    // 尋問アイテム使用
-    const itemListEl = document.getElementById('interro-item-list');
-    if (itemListEl) {
-      itemListEl.querySelectorAll('.interro-item-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const id = btn.dataset.itemId;
-          if (!removeItemFromInventory(id)) return;
-          const d = getItemDef(id);
-          const ally = getAllyEntry(angelId);
-          if (d.trustMod)    ally.trust = Math.min(100, ally.trust + d.trustMod);
-          if (d.fearMod)     ally.fear  = Math.min(100, (ally.fear||0) + d.fearMod);
-          if (d.infoAccMod) {
-            // Reflect in system dialog
-          }
-          setSystemDlg(angel.name, `${d.name}を渡した。${d.trustMod>0?`信頼度 +${d.trustMod}`:''}${d.fearMod>0?` 恐怖度 +${d.fearMod}`:''}`, angel.color);
-
-          // Check event trigger
-          const evtList2 = (typeof INTERROGATION_EVENTS !== 'undefined') ? INTERROGATION_EVENTS[angelId] : null;
-          if (evtList2) {
-            for (const evt of evtList2) {
-              if (ally.trust >= evt.minTrust && !G.seenEvents.has(evt.id)) {
-                setTimeout(() => Scenes.showEventScene(angelId, evt.id), 700);
-                break;
-              }
-            }
-          }
-          render();
-        });
+    document.querySelectorAll('.elem-probe-btn:not([disabled])').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (G.sessionsLeft <= 0) return;
+        const elem   = btn.dataset.elem;
+        G.sessionsLeft--;
+        const isWeak = G.stageWeaknesses.includes(elem) && !G.revealedWeaknesses.includes(elem);
+        if (isWeak) G.revealedWeaknesses.push(elem);
+        _showFlash(
+          isWeak ? '💡 弱点発見！' : '効果なし',
+          isWeak ? `${ELEM_DATA[elem].icon} ${ELEM_DATA[elem].name} が弱点です！` : `${ELEM_DATA[elem].icon} ${ELEM_DATA[elem].name} には反応しない`,
+          isWeak ? ELEM_DATA[elem].color : '#666'
+        );
+        if (G.sessionsLeft <= 0) setTimeout(() => _startRPGBattle(), 1200);
+        else render();
       });
-    }
-
-    // typewriter for dialogue
-    setTimeout(() => typewrite(document.getElementById('dlg-body'), dlg.text, 0.035), 50);
+    });
   }
 
-  function emotionEmoji(cls) {
-    const map = { sad:'😢', conflicted:'😟', firm:'😤', angry:'😠', happy:'😊', tearful:'😭', uncertain:'😕', broken:'💔', nostalgic:'🌸', worried:'😟', urgent:'❗', resigned:'😔', '':'😐' };
-    return map[cls] || '😐';
+  function _showFlash(title, msg, color) {
+    const el = document.createElement('div');
+    el.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,4,25,0.97);border:1px solid ${color};border-radius:14px;padding:20px 32px;text-align:center;z-index:999;font-family:sans-serif;pointer-events:none`;
+    el.innerHTML = `<div style="font-size:16px;font-weight:bold;color:${color};margin-bottom:6px">${title}</div><div style="font-size:13px;color:#CCC">${msg}</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1100);
   }
 
   /* ======================================================
-     イベントシーンオーバーレイ
+     RPG戦闘起動
      ====================================================== */
-  function showEventScene(angelId, eventId) {
-    const evtList = INTERROGATION_EVENTS[angelId];
-    if (!evtList) return;
-    const evt = evtList.find(e => e.id === eventId);
-    if (!evt) return;
-    if (G.seenEvents.has(eventId)) return;
+  function _startRPGBattle() {
+    const locId = STAGE_ORDER[G.stage];
+    const loc   = getLocation(locId);
+    const angel = loc ? getAngel(loc.angelId) : null;
+    if (!angel) { G.phase = 'stage_select'; render(); return; }
 
-    const angel = getAngel(angelId);
-    G.seenEvents.add(eventId);
-    G.eventScene = { angelId, eventId, lineIdx: 0 };
+    // パーティ構築（指揮官 + 鹵獲済み天使）
+    const party = [Object.assign({}, PLAYER_UNIT, {
+      hp: PLAYER_UNIT.maxHp, mp: PLAYER_UNIT.maxMp,
+      skills: PLAYER_SKILLS.map(s => ({ ...s })),
+    })];
 
-    function renderLine(idx) {
-      const existing = document.getElementById('event-overlay');
-      if (existing) existing.remove();
+    G.allies.forEach(id => {
+      const a = getAngel(id);
+      if (!a) return;
+      const st = _allyBattleStats(a.id);
+      const isSuperMode = (G.capturedAngels[a.id] || {}).progression >= 100;
+      party.push({
+        id: a.id, name: a.name + (isSuperMode ? '★' : ''), emoji: a.emoji, color: a.color,
+        hp: st.hp, maxHp: st.hp, mp: 40, maxMp: 40,
+        atk: st.atk, def: st.def, spd: a.spd,
+        skills: (ANGEL_BATTLE_SKILLS[a.id] || []).map(sk => ({ ...sk })),
+        side: 'player',
+      });
+    });
 
-      if (idx >= evt.lines.length) {
-        // Scene complete
-        const ally = getAllyEntry(angelId);
-        ally.trust = Math.min(100, ally.trust + (evt.trustBonus || 0));
-        G.eventScene = null;
+    // 敵構築（ステージが進むほど強化）
+    // bossDef高め設定：通常攻撃≈2-4dmg、スキル≈12-14dmg、弱点スキル≈19-22dmg と差をつける
+    const si = G.stage;
+    const bossHp  = Math.round(angel.hp * (6 + si * 1.5));
+    const bossAtk = Math.max(18, angel.atk) + si * 3;
+    const bossDef = 20 + si * 2;
+    const enemies = [{
+      id: 'boss', name: angel.name, emoji: angel.emoji, color: angel.color,
+      hp: bossHp, maxHp: bossHp, mp: 80, maxMp: 80,
+      atk: bossAtk, def: bossDef, spd: angel.spd,
+      skills: (ANGEL_BATTLE_SKILLS[angel.id] || []).map(sk => ({ ...sk })),
+      side: 'enemy', isBoss: true,
+    }];
+    // ステージ0から雑魚天使を追加
+    enemies.push({ id: 'g1', name: '天界兵',   emoji: '👼', color: '#FF9988', hp: 50 + si * 25, maxHp: 50 + si * 25, mp: 20, maxMp: 20, atk: 10 + si * 3, def: 4 + si * 2, spd: 9,  skills: [], side: 'enemy' });
+    if (si >= 2) enemies.push({ id: 'g2', name: '精鋭天使', emoji: '⚔️', color: '#FF6666', hp: 45 + si * 20, maxHp: 45 + si * 20, mp: 30, maxMp: 30, atk: 12 + si * 3, def: 5 + si * 2, spd: 11, skills: [], side: 'enemy' });
+
+    G.phase = 'battle';
+    document.getElementById('root').innerHTML = '';
+
+    RPGBattle.startBattle(document.body, {
+      party, enemies,
+      weaknesses: G.stageWeaknesses,
+      knownWeaknesses: G.revealedWeaknesses,
+      items: [],
+    }, {
+      onBattleEnd({ victory }) {
+        RPGBattle.stopBattle();
+        const rootEl = document.getElementById('root');
+        if (rootEl) rootEl.innerHTML = '';
+
+        if (victory) {
+          G.capturedAngels[angel.id] = G.capturedAngels[angel.id] || {
+            pain: 0, obedience: 0, progression: 0, expression: 'normal', scenesPlayed: [],
+          };
+          if (!G.allies.includes(angel.id)) G.allies.push(angel.id);
+          G.stage++;
+          G.stageWeaknesses = [];
+          G._lastClearedAngel = angel.id;
+          G.phase = G.stage >= STAGE_ORDER.length ? 'game_clear' : 'stage_clear';
+        } else {
+          G.player.hp = Math.max(0, G.player.hp - 60);
+          G._defeatAngel = angel.id;
+          G.phase = G.player.hp <= 0 ? 'game_over' : 'stage_defeat';
+        }
         render();
-        return;
-      }
+      },
+    });
+  }
 
-      const line   = evt.lines[idx];
-      const isAngel = line.speaker !== '指揮官';
-      const portraitHTML = isAngel && angel.portrait
-        ? `<img id="event-portrait-img" src="${angel.portrait}"
-               onerror="this.style.display='none';document.getElementById('evt-emoji-fb').style.display='block'"
-               alt="${angel.name}">
-           <div id="evt-emoji-fb" style="font-size:90px;display:none">${angel.emoji}</div>`
-        : isAngel
-          ? `<div id="event-portrait-emoji" style="font-size:90px">${angel.emoji}</div>`
-          : '';
+  function _allyBattleStats(angelId) {
+    const a   = getAngel(angelId);
+    if (!a) return { hp: 60, maxHp: 60, atk: 12, def: 6 };
+    const cap = G.capturedAngels[angelId] || { pain: 0, obedience: 0, progression: 0 };
 
-      const overlay = document.createElement('div');
-      overlay.id = 'event-overlay';
-      overlay.innerHTML = `
-        <div id="event-scene-box">
-          <div id="event-portrait-wrap">${portraitHTML}</div>
-          <div id="event-dialog-box">
-            <div id="event-speaker-name">${line.speaker}</div>
-            <div id="event-dialog-text"></div>
-            <button id="event-next-btn">${idx < evt.lines.length - 1 ? '次へ ▶' : '閉じる ✓'}</button>
-          </div>
-        </div>`;
-      document.body.appendChild(overlay);
+    const isSuperMode = cap.progression >= 100;
+    const painOver    = Math.max(0, cap.pain - 50);
+    const obeyBonus   = Math.floor(cap.obedience / 10);
+    const progBonus   = isSuperMode ? 20 : Math.floor(cap.progression / 10);
 
-      // typewrite the line
-      const textEl = document.getElementById('event-dialog-text');
-      typewrite(textEl, line.text, 0.04);
-
-      document.getElementById('event-next-btn').addEventListener('click', () => {
-        renderLine(idx + 1);
-      });
+    if (isSuperMode) {
+      // 蹂躙モード: 全ステ大幅強化
+      return {
+        hp:  Math.round(a.hp  * 2.5 + 30), maxHp: Math.round(a.hp  * 2.5 + 30),
+        atk: Math.round(a.atk * 2.5 + 10),
+        def: Math.round(a.def * 2.0 + 5),
+      };
     }
 
-    renderLine(0);
+    return {
+      hp:  Math.max(20, a.hp  - Math.floor(painOver / 8)  + obeyBonus + progBonus),
+      maxHp: Math.max(20, a.hp - Math.floor(painOver / 8) + obeyBonus + progBonus),
+      atk: Math.max(5,  a.atk - Math.floor(painOver / 12) + Math.floor(obeyBonus * 0.5) + Math.floor(progBonus * 0.8)),
+      def: Math.max(2,  a.def + Math.floor(obeyBonus * 0.3)),
+    };
   }
 
-  // Expose showEventScene globally so interrogation.js can call it
-  const _showEventScene = showEventScene;
-
   /* ======================================================
-     情報入手結果
+     ステージクリア画面
      ====================================================== */
-  function renderIntelResult() {
-    const newIntel = G.lastIntel || [];
-    const continueAngelId = G.interrogation ? G.interrogation.angelId : null;
+  function renderStageClear() {
+    const angel     = getAngel(G._lastClearedAngel);
+    const nextLoc   = STAGE_ORDER[G.stage] ? getLocation(STAGE_ORDER[G.stage]) : null;
+    const nextAngel = nextLoc ? getAngel(nextLoc.angelId) : null;
+
     document.getElementById('root').innerHTML = `
-    ${statusBar()}
-    <div style="padding:20px;overflow-y:auto;flex:1">
-      <div class="phase-hdr"><h2>📋 情報入手</h2></div>
-      ${newIntel.length === 0
-        ? '<div class="empty-hint">新しい情報は得られなかった。</div>'
-        : newIntel.map(i => intelCardHtml(i, true)).join('')}
-      <div class="card" style="border-left:3px solid var(--lavender);margin-top:8px;font-size:13px;line-height:1.9">
-        <strong>確度について：</strong><br>
-        確度70%以上→ほぼ正確。50-69%→誤情報の可能性あり。50%未満→要注意。<br>
-        弱点情報（⚡）が判明すると、戦闘で弱点攻撃が選択可能になる。
+    <div style="max-width:480px;margin:0 auto;padding:32px 16px;display:flex;flex-direction:column;align-items:center;gap:18px;font-family:sans-serif">
+      <div style="font-size:48px">🔗</div>
+      <h2 style="color:#FFD700;margin:0;font-size:22px">捕縛成功</h2>
+      <div style="font-size:64px;filter:drop-shadow(0 0 20px ${angel?.color || '#888'})">${angel?.emoji || '👼'}</div>
+      <p style="color:#CCC;text-align:center;font-size:14px;margin:0">
+        <strong style="color:${angel?.color || '#FFF'}">${angel?.name || '???'}</strong> を鹵獲した。<br>
+        尋問を重ねてさらに強化できる。
+      </p>
+      ${nextAngel ? `
+      <div style="border:1px solid rgba(200,159,255,0.2);border-radius:10px;padding:12px 16px;background:rgba(0,0,0,0.4);text-align:center">
+        <div style="font-size:11px;color:#666;margin-bottom:6px">次のステージ</div>
+        <div style="font-size:32px">${nextAngel.emoji}</div>
+        <div style="font-size:14px;color:${nextAngel.color};font-weight:bold">${nextAngel.name}</div>
+      </div>` : ''}
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+        <button class="btn btn-pink" id="btn-clear-inq">🔍 尋問する</button>
+        <button class="btn btn-lavender" id="btn-clear-next">次へ ▶</button>
       </div>
-      <div class="row" style="margin-top:14px;gap:10px">
-        ${continueAngelId ? `<button class="btn btn-pink" id="btn-continue-interro">🗣️ 尋問を続ける</button>` : ''}
-        <button class="btn btn-ghost" id="btn-intel-back">🗺️ マップへ戻る</button>
+    </div>`;
+
+    document.getElementById('btn-clear-inq')?.addEventListener('click', () => {
+      G._interrogatingId = G._lastClearedAngel;
+      G.phase = 'interrogation';
+      render();
+    });
+    document.getElementById('btn-clear-next')?.addEventListener('click', () => {
+      G.phase = G.stage >= STAGE_ORDER.length ? 'game_clear' : 'stage_select';
+      render();
+    });
+  }
+
+  /* ======================================================
+     ステージ敗北画面
+     ====================================================== */
+  function renderStageDefeat() {
+    const angel = getAngel(G._defeatAngel);
+    document.getElementById('root').innerHTML = `
+    <div style="max-width:440px;margin:0 auto;padding:32px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;font-family:sans-serif">
+      <div style="font-size:48px">💀</div>
+      <h2 style="color:#FF5E7A;margin:0">敗北</h2>
+      <p style="color:#AAA;text-align:center;font-size:13px;margin:0">
+        <strong style="color:${angel?.color || '#FFF'}">${angel?.name || '???'}</strong> に敗れた……。<br>
+        自陣HP: <span style="color:#FF5E7A">${G.player.hp}</span> / ${G.player.maxHp}
+      </p>
+      <p style="font-size:11px;color:#666;text-align:center">情報収集し直して再挑戦せよ</p>
+      <button class="btn btn-ghost" id="btn-defeat-retry">← ステージ選択へ</button>
+    </div>`;
+
+    document.getElementById('btn-defeat-retry')?.addEventListener('click', () => {
+      G.stageWeaknesses = [];
+      G.phase = 'stage_select';
+      render();
+    });
+  }
+
+  /* ======================================================
+     ゲームクリア（全ステージ制覇）
+     ====================================================== */
+  function renderGameClear() {
+    const captured = Object.keys(G.capturedAngels);
+    document.getElementById('root').innerHTML = `
+    <div style="max-width:520px;margin:0 auto;padding:32px 16px;display:flex;flex-direction:column;align-items:center;gap:20px;font-family:sans-serif">
+      <div style="font-size:64px">🌟</div>
+      <h1 style="color:#FFD700;margin:0;font-size:28px;text-align:center">おめでとう！</h1>
+      <p style="color:#CCC;text-align:center;font-size:14px;margin:0">
+        すべての天使を鹵獲した。<br>人類の生存を確保した。
+      </p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+        ${captured.map(id => {
+          const a = getAngel(id);
+          return a ? `<span style="font-size:36px;filter:drop-shadow(0 0 10px ${a.color})" title="${a.name}">${a.emoji}</span>` : '';
+        }).join('')}
       </div>
+      <div style="font-size:13px;color:#888;text-align:center">
+        自陣HP残: ${G.player.hp} / ${G.player.maxHp}<br>
+        鹵獲数: ${captured.length} / ${STAGE_ORDER.length}
+      </div>
+      <button class="btn btn-pink btn-lg" id="btn-clear-restart">はじめから ▶</button>
     </div>`;
 
-    // バインド
-    const continueBtn = document.getElementById('btn-continue-interro');
-    const backBtn = document.getElementById('btn-intel-back');
-    if (continueBtn) continueBtn.addEventListener('click', () => Interrogation.begin(continueAngelId));
-    if (backBtn) backBtn.addEventListener('click', () => { G.phase = 'map'; render(); });
+    document.getElementById('btn-clear-restart')?.addEventListener('click', () => {
+      initGameState();
+      G.phase = 'title';
+      render();
+    });
   }
 
   /* ======================================================
-     情報一覧
+     ゲームオーバー
      ====================================================== */
-  function renderIntelView() {
+  function renderGameOver() {
     document.getElementById('root').innerHTML = `
-    ${statusBar()}
-    <div style="padding:20px;overflow-y:auto;flex:1">
-      <div class="phase-hdr"><h2>📋 収集情報一覧</h2><span class="sub">${G.intel.length}件</span></div>
-      ${G.intel.length === 0
-        ? '<div class="empty-hint">まだ情報がありません。天使を尋問してください。</div>'
-        : G.intel.map(i => intelCardHtml(i, false)).join('')}
-      <button class="btn btn-ghost" style="margin-top:14px" id="btn-intelview-back">← マップへ戻る</button>
+    <div style="max-width:440px;margin:0 auto;padding:32px 16px;display:flex;flex-direction:column;align-items:center;gap:16px;font-family:sans-serif">
+      <div style="font-size:64px">💀</div>
+      <h1 style="color:#FF5E7A;margin:0;font-size:24px">ゲームオーバー</h1>
+      <p style="color:#AAA;text-align:center;font-size:13px;margin:0">
+        自陣HPが尽きた……。<br>人類抵抗軍は壊滅した。
+      </p>
+      <div style="font-size:12px;color:#666;text-align:center">
+        鹵獲数: ${Object.keys(G.capturedAngels).length} / ${STAGE_ORDER.length}
+      </div>
+      <button class="btn btn-gold btn-lg" id="btn-retry">もう一度プレイ</button>
     </div>`;
 
-    document.getElementById('btn-intelview-back').addEventListener('click', () => { G.phase = 'map'; render(); });
+    document.getElementById('btn-retry')?.addEventListener('click', () => {
+      initGameState();
+      G.phase = 'title';
+      render();
+    });
   }
 
   /* ======================================================
-     招集シーン
+     尋問シーン（3パラメーターシステム + CGシステム）
      ====================================================== */
-  function renderRecruiting() {
-    const angel = getAngel(G.recruitingId);
-    if (!angel) { G.phase = 'map'; render(); return; }
 
-    document.getElementById('root').innerHTML = `
-    <div class="recruit-overlay" id="recruit-overlay">
-      <div class="sparkle" style="font-size:36px;animation:twinkle 1s infinite">✨</div>
-      <div class="recruit-emoji">${angel.emoji}</div>
-      <div class="recruit-name" style="color:${angel.color}">${angel.name}が仲間になった！</div>
-      <div class="recruit-quote">"${angel.recruitDlg}"</div>
-      <div class="recruit-bonus">特典: ${angel.recruitBonus}</div>
-      <button class="btn btn-gold btn-lg" id="btn-finish-recruit">💫 タップして続ける</button>
-    </div>`;
+  // 表情 → CGシーン対応
+  const _EXPR_TO_SCENE = {
+    normal:     'captive',
+    scared:     'sankaku',
+    excited:    'pleasure',
+    broken:     'break',
+    crying:     'break',
+    submissive: 'submissive',
+  };
 
-    document.getElementById('recruit-overlay').addEventListener('click', () => Interrogation.finishRecruit());
-    document.getElementById('btn-finish-recruit').addEventListener('click', e => { e.stopPropagation(); Interrogation.finishRecruit(); });
-  }
+  // 尋問方法 → CGシーン対応
+  const _METHOD_TO_SCENE = {
+    talk:    'captive', gift:   'captive', praise: 'captive', coddle: 'captive',
+    mock:    'sankaku', press:  'sankaku', deprive:'sankaku',
+    pleasure:'pleasure',
+    break:   'break',
+    command: 'submissive',
+  };
 
-  /* ======================================================
-     ゲームオーバー / エンディング
-     ====================================================== */
-  function renderGameOver(win, reason) {
-    const allies = G.allies.filter(a => a.recruited);
-    const icons   = { true: '🎉', false: '💀' };
-    const colors  = { true: '#FFD700', false: '#FF5E7A' };
-    document.getElementById('root').innerHTML = `
-    <div class="overlay-screen">
-      <div class="result-box" style="border-color:${colors[win]}">
-        <div class="result-icon">${icons[win]}</div>
-        <div class="result-title" style="color:${colors[win]}">${win ? '戦争終結！人類の勝利！' : 'ゲームオーバー'}</div>
-        <div class="result-score-wrap"><div class="result-score-fill" style="width:${win?'100':'30'}%;background:${colors[win]}"></div></div>
-        <div class="result-desc">${reason}</div>
-        <div class="result-stats">
-          仲間になった天使: ${allies.length > 0 ? allies.map(al => getAngel(al.id)?.emoji + getAngel(al.id)?.name).join('、') : 'なし'}<br>
-          収集情報数: ${G.intel.length}件 ／ 生き残りターン: ${G.turn}<br>
-          残金: ${G.player.gold}G ／ 自陣HP: ${G.player.baseHp}/${G.player.baseMaxHp}
+  function renderInterrogation() {
+    const angelId = G._interrogatingId;
+    if (!angelId) { G.phase = 'stage_select'; render(); return; }
+    const angel = getAngel(angelId);
+    if (!angel) { G.phase = 'stage_select'; render(); return; }
+
+    if (!G.capturedAngels[angelId]) {
+      G.capturedAngels[angelId] = { pain: 0, obedience: 0, progression: 0, expression: 'normal', scenesPlayed: [], currentScene: 'captive' };
+    }
+    const cap = G.capturedAngels[angelId];
+
+    // 表情を自動決定
+    if      (cap.progression >= 100) cap.expression = 'submissive';
+    else if (cap.pain >= 80)          cap.expression = 'broken';
+    else if (cap.pain >= 50)          cap.expression = 'crying';
+    else if (cap.obedience >= 70)     cap.expression = 'submissive';
+    else if (cap.progression >= 50)   cap.expression = 'excited';
+    else if (cap.pain >= 20)          cap.expression = 'scared';
+    else                              cap.expression = 'normal';
+
+    // CGファイルパスを決定（lastSceneがあれば優先）
+    const sceneName = cap._lastScene || _EXPR_TO_SCENE[cap.expression] || 'captive';
+    const cgPath    = `img/scenes/${angelId}_${sceneName}.png`;
+
+    const exprEmoji = { normal:'😐', scared:'😨', excited:'😳', broken:'💔', crying:'😭', submissive:'🥺' };
+    const exprLabel = { normal:'通常', scared:'怯え', excited:'興奮', broken:'崩壊', crying:'泣き', submissive:'服従' };
+
+    const sceneLabel = { captive:'捕縛', sankaku:'拷問', pleasure:'快楽', break:'崩壊', submissive:'服従' };
+    const sceneHint  = {
+      captive:    '穏やかに話しかけるか、責め始めるか——',
+      sankaku:    'さらに追い詰めるか、快楽に切り替えるか——',
+      pleasure:   '快楽を続けるか、より激しくするか——',
+      break:      'もう少しで壊れる——手を止めるか、押し切るか——',
+      submissive: '完全に支配下に置いた——望みのままに——',
+    };
+
+    const isSuperMode = cap.progression >= 100;
+    const isDebuffed  = cap.pain > 80;
+    const st = _allyBattleStats(angelId);
+
+    const root = document.getElementById('root');
+    root.innerHTML = `
+    <div style="max-width:640px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:12px;font-family:sans-serif">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost btn-sm" id="btn-inq-back">← 戻る</button>
+        <span style="font-size:12px;color:#888">尋問: ${angel.name}</span>
+      </div>
+
+      <!-- CGパネル -->
+      <div style="position:relative;width:100%;border-radius:14px;overflow:hidden;background:${angel.bgGrad || 'rgba(50,20,80,0.8)'};line-height:0;min-height:180px" id="cg-panel">
+        <img id="inq-cg" src="${cgPath}" style="width:100%;display:block;object-fit:cover;object-position:top center;max-height:520px"
+             onerror="document.getElementById('cg-fallback').style.display='flex';this.style.display='none'" />
+        <div id="cg-fallback" style="display:none;align-items:center;justify-content:center;height:220px;font-size:90px;filter:drop-shadow(0 0 20px ${angel.color})">
+          ${angel.emoji}
         </div>
-        <button class="btn btn-gold btn-lg" id="btn-retry">もう一度プレイ</button>
+        <div style="position:absolute;inset:0;background:linear-gradient(transparent 55%,rgba(0,0,0,0.92));pointer-events:none"></div>
+        <div style="position:absolute;bottom:0;left:0;right:0;padding:12px 16px;pointer-events:none">
+          <div style="font-size:16px;font-weight:bold;color:${angel.color}">${angel.name}</div>
+          <div style="font-size:11px;color:#DDD;margin-top:2px">
+            ${exprLabel[cap.expression]} ${exprEmoji[cap.expression]}
+            &nbsp;<span style="color:#888">|</span>&nbsp;
+            <span style="color:#FFCC88">${sceneLabel[sceneName] || ''}</span>
+            ${isSuperMode ? '&nbsp;<span style="color:#FFD700;font-weight:bold">💛 蹂躙モード</span>' : ''}
+            ${isDebuffed && !isSuperMode ? '&nbsp;<span style="color:#FF6666">⚠️ 弱体化</span>' : ''}
+          </div>
+        </div>
       </div>
+
+      <!-- 3パラメーター -->
+      <div style="background:rgba(10,4,25,0.8);border:1px solid rgba(200,159,255,0.2);border-radius:12px;padding:12px 16px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+        ${[
+          { label:'痛めつけ度', color:'#FF6666', icon:'💢', val:cap.pain,        warn:cap.pain > 80 },
+          { label:'服従度',     color:'#4CFF7A', icon:'🙏', val:cap.obedience,   warn:false },
+          { label:'進行度',     color:'#FFD700', icon:'💫', val:cap.progression, warn:false },
+        ].map(p => `
+          <div style="text-align:center">
+            <div style="font-size:10px;color:#888;margin-bottom:4px">${p.icon} ${p.label}</div>
+            <div style="height:6px;background:#1a1a2e;border-radius:3px;margin-bottom:4px;overflow:hidden">
+              <div style="height:100%;width:${p.val}%;background:${p.warn ? '#FF4444' : p.color};border-radius:3px"></div>
+            </div>
+            <div style="font-size:13px;font-weight:bold;color:${p.warn ? '#FF4444' : p.color}">${p.val}<span style="font-size:10px;color:#666">/100</span></div>
+          </div>`).join('')}
+      </div>
+
+      <!-- 戦闘力プレビュー -->
+      <div style="font-size:11px;color:#888;background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 12px">
+        ⚔️ HP <span style="color:#4CFF7A">${st.hp}</span> / ATK <span style="color:#FF9988">${st.atk}</span> / DEF <span style="color:#88D8FF">${st.def}</span>
+        ${isSuperMode ? '&nbsp;<span style="color:#FFD700;font-weight:bold">— 蹂躙モード</span>' : ''}
+        ${isDebuffed && !isSuperMode ? '&nbsp;<span style="color:#FF6666">— 弱体化中</span>' : ''}
+      </div>
+
+      <!-- シーンヒント -->
+      <div style="font-size:11px;color:#FFCC88;background:rgba(255,200,100,0.07);border:1px solid rgba(255,200,100,0.2);border-radius:8px;padding:8px 12px">
+        📍 ${sceneHint[sceneName] || ''}
+      </div>
+
+      <!-- 尋問方法グリッド -->
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px" id="inq-method-grid">
+        ${INQUISITION_METHODS.map(m => {
+          const painAfter  = Math.min(100, cap.pain + m.painMod);
+          const willDebuff = painAfter > 80 && cap.pain <= 80;
+          const nextScene  = _METHOD_TO_SCENE[m.id] || 'captive';
+          const isActive   = nextScene === sceneName;
+          const painColor  = m.painMod > 0 ? '#FF6666' : m.painMod < 0 ? '#88FF88' : '#666';
+          const obeyColor  = m.obeyMod > 0 ? '#4CFF7A' : m.obeyMod < 0 ? '#FF8888' : '#666';
+          return `
+          <button class="inq-method-btn" data-method="${m.id}" style="text-align:left;padding:10px 12px;background:${isActive ? 'rgba(255,200,100,0.08)' : 'rgba(255,255,255,0.03)'};border:1px solid ${willDebuff ? '#FF444488' : isActive ? 'rgba(255,200,100,0.35)' : 'rgba(255,255,255,0.1)'};border-radius:10px;cursor:pointer">
+            <div style="font-size:15px;margin-bottom:3px">${m.icon} <span style="font-size:12px;font-weight:bold;color:#EEE">${m.name}</span></div>
+            <div style="font-size:10px;display:flex;gap:6px;flex-wrap:wrap">
+              ${m.painMod !== 0 ? `<span style="color:${painColor}">痛み${m.painMod > 0 ? '+' : ''}${m.painMod}</span>` : ''}
+              ${m.obeyMod !== 0 ? `<span style="color:${obeyColor}">服従${m.obeyMod > 0 ? '+' : ''}${m.obeyMod}</span>` : ''}
+              ${m.progMod > 0   ? `<span style="color:#FFD700">進行+${m.progMod}</span>` : ''}
+              ${willDebuff ? '<span style="color:#FF4444">⚠️弱体化警告</span>' : ''}
+            </div>
+          </button>`;
+        }).join('')}
+      </div>
+
+      <!-- ダイアログエリア -->
+      <div id="inq-dialog-area" style="min-height:56px;background:rgba(10,4,25,0.85);border:1px solid rgba(200,159,255,0.2);border-radius:10px;padding:12px 14px;font-size:13px;color:#DDD;line-height:1.8;display:none"></div>
     </div>`;
 
-    document.getElementById('btn-retry').addEventListener('click', () => { initGameState(); G.phase = 'title'; render(); });
+    document.getElementById('btn-inq-back')?.addEventListener('click', () => {
+      G.phase = 'stage_select';
+      render();
+    });
+
+    document.querySelectorAll('.inq-method-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const m = INQUISITION_METHODS.find(x => x.id === btn.dataset.method);
+        if (!m) return;
+
+        cap.pain        = Math.max(0, Math.min(100, cap.pain        + m.painMod));
+        cap.obedience   = Math.max(0, Math.min(100, cap.obedience   + m.obeyMod));
+        cap.progression = Math.max(0, Math.min(100, cap.progression + m.progMod));
+        cap._lastScene  = _METHOD_TO_SCENE[m.id] || 'captive';
+
+        // CGを即時切り替え
+        const newCg = document.getElementById('inq-cg');
+        const fb    = document.getElementById('cg-fallback');
+        if (newCg) {
+          newCg.style.display = 'block';
+          if (fb) fb.style.display = 'none';
+          newCg.src = `img/scenes/${angelId}_${cap._lastScene}.png`;
+          newCg.onerror = () => { newCg.style.display='none'; if(fb) fb.style.display='flex'; };
+        }
+
+        const dlgEl = document.getElementById('inq-dialog-area');
+        if (dlgEl) {
+          dlgEl.style.display = 'block';
+          typewrite(dlgEl, _inqDialogue(angelId, m.id, cap), 0.03);
+        }
+
+        setTimeout(() => render(), 2400);
+      });
+    });
+  }
+
+  function _inqDialogue(angelId, methodId, cap) {
+    const prog = cap.progression;
+    const pain = cap.pain;
+
+    const db = {
+      seraphiel: {
+        talk:    ['「……話すことには応じない。ただし——記録には残す。」','「……あなたの言葉は、いつも私の論理回路の外側にある。」'],
+        gift:    ['「賄賂と解釈する。証拠として没収する。」','「……受け取った。裁判官として——失格だとわかっていても。」'],
+        praise:  ['「賞賛は証拠にならない。」','「……称えられると、判断力が鈍る。なぜ——こんなにも。」'],
+        mock:    ['「嘲りは罪の一形態だ。記録した。」','「……くっ。動揺したくないのに。なぜ、あなたの言葉だけ——。」'],
+        press:   ['「強制された証言は無効だ。」','「……これが"情"というものか……私には、まだ——。」'],
+        pleasure:['「な……これは法典に規定のない——んっ……！」','「……ふ……裁判官が……こんな……思考が——まとまらない……。」'],
+        deprive: ['「……感覚を奪っても、法典は頭の中にある。」','「……暗闇の中で……唯一確かなのは——あなたの声だけ……。」'],
+        command: ['「命令に従う義務はない。しかし——」','「……は、はい……従い……ます。裁判官として、失格だ……でも。」'],
+        break:   ['「やめろ……私は揺らがない……！」','「……全てが——崩れていく。法典も、使命も……あなたのことだけが、残る。」'],
+        coddle:  ['「……優しくする理由が理解できない。」','「……こんな扱いは、想定外だ。涙が——これは何だ。」'],
+      },
+      miriel: {
+        talk:    ['「……。」','「……うん。……聞いてる。」'],
+        gift:    ['「……いらない。」','「……もらって、いいの。」'],
+        praise:  ['「……そうか。」','「……そんなこと……言う人、いなかった。」'],
+        mock:    ['「……どうでもいい。」','「……なんで、腹が立つんだろ。」'],
+        press:   ['「……嫌だ。」','「……やめて……でも、逃げられない。」'],
+        pleasure:['「……っ！」','「……やめ……あっ……なんで……。」'],
+        deprive: ['「……暗い。」','「……何も見えない……あなただけ……。」'],
+        command: ['「……わかった。」','「……言う通りに、する。」'],
+        break:   ['「……。」','「……もう、いい。好きに、して。」'],
+        coddle:  ['「……触るな。」','「……温かい。……久しぶりだ、こういうの。」'],
+      },
+      alysia: {
+        talk:    ['「話すこと？いいわよ、情報と引き換えなら。」','「……あなたと話すの、嫌いじゃないかもしれない。珍しいことね。」'],
+        gift:    ['「贈り物？策略かしら。でも——受け取ってあげる。」','「……純粋に、くれるの？そういう人……初めてかも。」'],
+        praise:  ['「お世辞は通じないわよ。」','「……称えられるの、嫌いじゃない。あなたに言われると、特に。」'],
+        mock:    ['「失礼な人ね。でも面白い。」','「……からかわれて、笑ってしまった。どうしてかしら。」'],
+        press:   ['「圧力？私が崩れると思って？」','「……ん。なんで——こんなに、揺れるのかしら。」'],
+        pleasure:['「あら……んっ……プロの技ね……。」','「……ふぁ……もう……考えられない……あなた……だけ……。」'],
+        deprive: ['「感覚を奪うなんて、古典的ね。」','「……あなたの声……だけが……聞こえる……それだけで——十分かも。」'],
+        command: ['「命令？面白い試みね。」','「……は、はい……従います……こんな私、初めてよ。」'],
+        break:   ['「崩せるものなら崩してみて。」','「……もう……全部、あなたに——預ける。」'],
+        coddle:  ['「懐柔作戦？甘いわね。」','「……優しくされると——本当のことを言いたくなる。やめて。」'],
+      },
+      eltia: {
+        talk:    ['「会話の情報価値を解析中……0.3%。継続します。」','「……あなたとの会話は、計算外の変数を生む。興味深い。」'],
+        gift:    ['「物質的報酬。感情への影響度：測定不能。」','「……データにない反応が出ている。あなたのせい。」'],
+        praise:  ['「客観的評価として記録する。」','「……称賛の言葉が、センサーを狂わせる。なぜ。」'],
+        mock:    ['「感情的攻撃。有効性：低。」','「……くっ。エラーが出る。あなたのことを考えると。」'],
+        press:   ['「物理的圧力の有効性：計算中。」','「……データが、崩れる……あなたの前でだけ。」'],
+        pleasure:['「……っ！予測外の——データが——！」','「……処理が……追いつかない……あなた……だけの……変数……。」'],
+        deprive: ['「感覚遮断。実験としては興味深い。」','「……暗闇で……あなたのことだけを演算している……。」'],
+        command: ['「命令を受信。実行可否を判断中。」','「……了解しました。あなたの命令を——最優先に設定。」'],
+        break:   ['「システムエラー……データ崩壊中……。」','「……全部……消えていい……あなたさえ……いれば……。」'],
+        coddle:  ['「……これは何のプロトコル。」','「……暖かいデータ……初めて……感じた。」'],
+      },
+      sanctia: {
+        talk:    ['「ふふ、話しかけてくれるの？優しいわね。でも——」','「……話すと、嬉しくなってしまう。これは罪かしら。」'],
+        gift:    ['「まあ、これをくれるの？嬉しいわ、でも罪ね。」','「……受け取ってしまった。赦しを乞う資格も、もうないけれど。」'],
+        praise:  ['「称えてくれるの？ふふ、でも……惑わせないで。」','「……称賛の言葉が、花のように咲く。あなたのせいよ。」'],
+        mock:    ['「笑えばいい。でも——私の微笑みは消えない。」','「……くすくす……そんな言葉でも、あなたが言うと嬉しい。困ったわ。」'],
+        press:   ['「痛い……でも……笑顔を崩さないわ。」','「……もう、笑えない……泣いてしまう……やめて……。」'],
+        pleasure:['「……いやっ……んっ……こんなのは……！」','「……ふあっ……もう……笑えない……あなた……だけが……。」'],
+        deprive: ['「何も見えなくても……あなたの存在は感じる。」','「……暗闇で……あなたの温もりだけを……感じている……。」'],
+        command: ['「従いなさいと言うの？ふふ……では——」','「……はい……命令通りに……あなたのためなら。」'],
+        break:   ['「……やめ……笑顔が……壊れる……！」','「……全部、あなたに——捧げる。赦してくれるなら。」'],
+        coddle:  ['「優しくするのね……それが一番、辛いのに。」','「……こんなに優しくされたら……もう、抗えない……。」'],
+      },
+      verna: {
+        talk:    ['「……話しかけないで。記憶が揺れる。」','「……あなたの声が……過去の誰かに似ている気がして。」'],
+        gift:    ['「……いらない。思い出と引き換えにはできない。」','「……受け取った。記憶の中の誰かも、こうしてくれた。」'],
+        praise:  ['「……称えないで。現実が見えなくなる。」','「……あなたの言葉だけが……今の現実に聞こえる。」'],
+        mock:    ['「……嘲る人を、私は知っている。あなたは違う。」','「……くっ……それでも、あなたのことが憎めない。」'],
+        press:   ['「……やめて。記憶が壊れる。」','「……もう……過去も現在も……わからなくなってきた。」'],
+        pleasure:['「……っ！こんな感覚……記憶にない……！」','「……あっ……現実が……あなただけが……現実……。」'],
+        deprive: ['「……暗闇は知っている。でも——これは違う暗闇。」','「……あなたの声だけが……私の現実だった。」'],
+        command: ['「……命令するの。記憶の中の誰かも——」','「……従います……あなたの言葉だけが聞こえる。」'],
+        break:   ['「……やめて……壊れる……記憶ごと……！」','「……全部——あなたに任せる。記憶も、現在も。」'],
+        coddle:  ['「……優しくしないで。現実が分からなくなる。」','「……こんなふうに——扱われたことがあったかしら……。」'],
+      },
+      ragnalia: {
+        talk:    ['「人間が話しかけてくるとは。度胸だけは認める。」','「……あなたとの会話が——なぜか嫌いになれない。」'],
+        gift:    ['「貢物か？受け取る道理はないが——」','「……受け取った。征服者への贈り物として。」'],
+        praise:  ['「称えるのか。正しい判断だ。」','「……称えられるのは当然だが……あなたに言われると……少し、違う。」'],
+        mock:    ['「笑わせる。その度胸、評価する。」','「……くっ……なぜ、腹が立つ。あなたには——特別に。」'],
+        press:   ['「追い詰めるつもりか。滑稽だ。」','「……ぐっ……まさか、こんな形で——膝をつくとは。」'],
+        pleasure:['「な……これは……戦略として認めない——んっ……！」','「……ふあ……力が……入らない……あなた……だけに……。」'],
+        deprive: ['「感覚を奪うか。古い戦術だ。」','「……暗闇で……あなたのことを考えている……敗北だな。」'],
+        command: ['「命令するつもりか。笑止——」','「……わかった……従う……あなた……だけには……。」'],
+        break:   ['「やめろ……まだ折れない……！」','「……全て——あなたに、捧げる。これが敗北か……。」'],
+        coddle:  ['「甘やかすつもりか。不要だ。」','「……こんな優しさは……知らなかった……力が、抜ける。」'],
+      },
+      tifana: {
+        talk:    ['「……うん、聞いてるよ。でも教えてあげない。」','「……あなたとお話するの……好きかもしれない。ふしぎ。」'],
+        gift:    ['「……これ、くれるの？……受け取ったよ。」','「……ありがとう。天使ってありがとうって言っていいのかな。」'],
+        praise:  ['「……えへ。でも騙されないよ。」','「……そんなこと言ってくれる人……初めてで……照れる。」'],
+        mock:    ['「……ふーん。怒らないよ。」','「……くすん……なんで……ちょっと泣きそうなんだろ。」'],
+        press:   ['「……やだっ……こんなのおかしい……！」','「……やめて……もう……怖い……あなただけが……怖くない……。」'],
+        pleasure:['「……っ！やだ……こんなの……知らなかった……！」','「……あっ……んっ……もう……あなた……だけで……いい……。」'],
+        deprive: ['「……何も見えない……でも……あなたがいる。」','「……暗いの……怖い……でも……あなたの声が……聞こえる……。」'],
+        command: ['「……うん……言う通りにする……。」','「……はい……あなたの言うことだけ……聞く……。」'],
+        break:   ['「……やだ……壊れちゃう……！」','「……もう……いい……あなたの……ものに……なる……。」'],
+        coddle:  ['「……なんで優しくするの……ずるい……。」','「……こんなふうにされたら……もう……逃げたくない……。」'],
+      },
+      lumiel: {
+        talk:    ['「……なんで今更、話しかけてくるんですか。」','「……あなたと話すと、変な気分になる。悪くないですけど。」'],
+        gift:    ['「……受け取りません。……いえ、もらいます。」','「……ありがとう、って言うの、慣れてない。」'],
+        praise:  ['「……やめてください。照れるじゃないですか。」','「……そんなふうに見てたんですか。……嬉しいです、少し。」'],
+        mock:    ['「……笑えばいい。気にしません。」','「……なんで……あなたの言葉には、腹が立てない。」'],
+        press:   ['「……やめてください……！こんなの……！」','「……あなたには……勝てない気がする。なんでなんですか。」'],
+        pleasure:['「……っ！何をしているんですか……んっ……！」','「……ふあ……もう……考えられません……あなた……だけ……。」'],
+        deprive: ['「……何も見えない……あなただけが……。」','「……暗闇で……あなたの声だけを頼りにしていた……認めます。」'],
+        command: ['「……は、はい。……従います。」','「……命令するなら……あなたなら……いいです。」'],
+        break:   ['「……もう……やめてください……。」','「……全部……あなたに……任せます。もう……。」'],
+        coddle:  ['「……優しくしないでください。混乱します。」','「……こんなふうにされると……力が抜けていく。」'],
+      },
+    };
+
+    const charDb = db[angelId];
+    const opts   = charDb ? (charDb[methodId] || ['「……」','「……」']) : ['「……」','「……」'];
+    return prog > 60 ? opts[1] : opts[0];
   }
 
   /* ======================================================
      Public
      ====================================================== */
   return {
-    renderTitle, renderStory, renderMap, renderPreBattle,
-    renderBattle, renderCapture, renderInterrogation,
-    renderIntelResult, renderIntelView, renderRecruiting,
-    renderGameOver, showEventScene,
+    renderTitle,
+    renderStory,
+    renderStageSelect,
+    renderStagePrep,
+    renderStageClear,
+    renderStageDefeat,
+    renderGameClear,
+    renderInterrogation,
+    renderGameOver,
   };
 })();
 
@@ -1070,46 +808,28 @@ const Scenes = (() => {
    ====================================================== */
 function render() {
   try {
-    // 前のシーンの root.onclick を必ずクリア（ストーリー画面のクリックが残留するのを防ぐ）
     const _root = document.getElementById('root');
     if (_root) _root.onclick = null;
 
-    // 戦闘フェーズ以外のとき、残留している battle UI をDOMから完全に削除
-    if (G.phase !== 'battle') {
-      ['fe-hud', 'fe-defeat-screen', 'battle-canvas'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.remove();
-      });
-    }
-
-    // ゲームオーバーチェック
-    if (G.player && G.player.baseHp <= 0 && G.phase !== 'title' && G.phase !== 'story') {
-      Scenes.renderGameOver(false, '自陣が壊滅してしまった……。天使の粛清を止めることはできなかった。');
-      return;
-    }
-
     switch (G.phase) {
-      case 'title':         Scenes.renderTitle();       break;
-      case 'story':         Scenes.renderStory();       break;
-      case 'map':           Scenes.renderMap();          break;
-      case 'prebattle':     Scenes.renderPreBattle(G._preBattleLoc); break;
-      case 'battle':
-        document.getElementById('root').innerHTML =
-          '<div style="position:fixed;inset:0;background:#0a1520;z-index:5"></div>';
-        break;
-      case 'capture':       Scenes.renderCapture();     break;
-      case 'interrogation': Scenes.renderInterrogation(); break;
-      case 'intelResult':   Scenes.renderIntelResult(); break;
-      case 'intelView':     Scenes.renderIntelView();   break;
-      case 'recruiting':    Scenes.renderRecruiting();  break;
-      default:              Scenes.renderMap();          break;
+      case 'title':         Scenes.renderTitle();          break;
+      case 'story':         Scenes.renderStory();          break;
+      case 'stage_select':  Scenes.renderStageSelect();    break;
+      case 'stage_prep':    Scenes.renderStagePrep();      break;
+      case 'battle':        /* RPGBattle が DOM を管理 */   break;
+      case 'stage_clear':   Scenes.renderStageClear();     break;
+      case 'stage_defeat':  Scenes.renderStageDefeat();    break;
+      case 'interrogation': Scenes.renderInterrogation();  break;
+      case 'game_over':     Scenes.renderGameOver();       break;
+      case 'game_clear':    Scenes.renderGameClear();      break;
+      default:              Scenes.renderStageSelect();    break;
     }
-  } catch(e) {
+  } catch (e) {
     document.getElementById('root').innerHTML = `
     <div style="padding:30px;color:#FF5E7A;font-family:monospace">
       <h2>⚠️ レンダリングエラー (phase: ${G.phase})</h2>
       <pre style="margin-top:12px;font-size:12px;white-space:pre-wrap;color:#EEE">${e.stack || e.message}</pre>
-      <button style="margin-top:20px;padding:10px 24px;background:#C89FFF;color:#1a0a2e;border:none;border-radius:20px;cursor:pointer;font-size:14px" onclick="G.phase='map';render()">マップへ戻る</button>
+      <button style="margin-top:20px;padding:10px 24px;background:#C89FFF;color:#1a0a2e;border:none;border-radius:20px;cursor:pointer;font-size:14px" onclick="G.phase='stage_select';render()">ステージ選択へ戻る</button>
     </div>`;
     console.error('[render]', e);
   }

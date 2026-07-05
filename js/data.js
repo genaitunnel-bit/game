@@ -754,12 +754,98 @@ const METHODS = [
     posText:'情報精度 +30', negText:'好感度 -28 / 招集不可' },
 ];
 
+/* -------- 属性データ -------- */
+const ELEM_DATA = {
+  fire:    { name:'炎',   icon:'🔥', color:'#FF7040' },
+  ice:     { name:'氷',   icon:'❄️', color:'#88D8FF' },
+  thunder: { name:'雷',   icon:'⚡', color:'#FFE040' },
+  dark:    { name:'闇',   icon:'🌑', color:'#CC80FF' },
+  light:   { name:'光',   icon:'✨', color:'#FFFFA0' },
+  wind:    { name:'風',   icon:'🌪️', color:'#88FFB8' },
+};
+const ELEM_KEYS = Object.keys(ELEM_DATA);
+
+/* -------- ステージ順序（線形進行） -------- */
+const STAGE_ORDER = ['court','battlefield','garden','tower','sanctuary','ruins','final_bastion'];
+
+/* -------- 天使ごとの戦闘スキル -------- */
+const ANGEL_BATTLE_SKILLS = {
+  lumiel:    [
+    { name:'聖光',     elem:'light',   power:1.3, mpCost:8  },
+    { name:'風の詠唱', elem:'wind',    power:1.2, mpCost:6  },
+    { name:'回復の光', elem:null,      power:0,   mpCost:15, isHeal:true, healValue:35 },
+  ],
+  seraphiel: [
+    { name:'裁きの光', elem:'light',   power:1.5, mpCost:10 },
+    { name:'断罪の闇', elem:'dark',    power:1.3, mpCost:8  },
+  ],
+  miriel:    [
+    { name:'殲滅の鉄槌', elem:'dark',    power:1.6, mpCost:12 },
+    { name:'雷の鉄槌',   elem:'thunder', power:1.4, mpCost:10 },
+  ],
+  alysia:    [
+    { name:'誘惑の風', elem:'wind',    power:1.3, mpCost:8  },
+    { name:'闇の誘惑', elem:'dark',    power:1.4, mpCost:10 },
+  ],
+  eltia:     [
+    { name:'観測の雷', elem:'thunder', power:1.4, mpCost:8  },
+    { name:'分析の光', elem:'light',   power:1.3, mpCost:8  },
+  ],
+  sanctia:   [
+    { name:'浄化の炎', elem:'fire',    power:1.5, mpCost:10 },
+    { name:'神の光',   elem:'light',   power:1.6, mpCost:12 },
+  ],
+  verna:     [
+    { name:'記憶の闇', elem:'dark',    power:1.5, mpCost:10 },
+    { name:'忘却の氷', elem:'ice',     power:1.4, mpCost:8  },
+  ],
+  ragnalia:  [
+    { name:'終末の雷', elem:'thunder', power:1.7, mpCost:15 },
+    { name:'滅亡の炎', elem:'fire',    power:1.6, mpCost:12 },
+    { name:'黙示の闇', elem:'dark',    power:1.5, mpCost:10 },
+  ],
+  tifana:    [
+    { name:'古代の光', elem:'light',   power:1.8, mpCost:15 },
+    { name:'星の氷',   elem:'ice',     power:1.6, mpCost:12 },
+    { name:'原初の炎', elem:'fire',    power:1.7, mpCost:13 },
+  ],
+};
+
+/* -------- 尋問コマンド（10種）-------- */
+const INQUISITION_METHODS = [
+  { id:'talk',     name:'穏やかに話す',   icon:'💬', painMod:0,   obeyMod:+8,  progMod:+2,  desc:'心を開かせる基本アプローチ' },
+  { id:'gift',     name:'贈り物',         icon:'🎁', painMod:0,   obeyMod:+12, progMod:+3,  desc:'プレゼントで親近感を高める' },
+  { id:'praise',   name:'称える',         icon:'✨', painMod:0,   obeyMod:+15, progMod:+5,  desc:'存在を肯定し自我を溶かす' },
+  { id:'mock',     name:'嘲笑する',       icon:'😏', painMod:+10, obeyMod:-5,  progMod:+8,  desc:'プライドを傷つけ揺さぶる' },
+  { id:'press',    name:'強引に迫る',     icon:'👊', painMod:+15, obeyMod:-8,  progMod:+12, desc:'肉体的プレッシャーをかける' },
+  { id:'pleasure', name:'快楽を与える',   icon:'💕', painMod:-5,  obeyMod:+10, progMod:+18, desc:'身体に直接快楽を教え込む' },
+  { id:'deprive',  name:'感覚遮断',       icon:'🌑', painMod:+8,  obeyMod:+5,  progMod:+10, desc:'感覚を奪い依存を生む' },
+  { id:'command',  name:'命令する',       icon:'⚡', painMod:+5,  obeyMod:+18, progMod:+8,  desc:'上位存在として絶対服従を迫る' },
+  { id:'break',    name:'精神を砕く',     icon:'💀', painMod:+30, obeyMod:+20, progMod:+15, desc:'限界を超えた調教。崩壊リスクあり' },
+  { id:'coddle',   name:'甘やかす',       icon:'🤗', painMod:-15, obeyMod:+25, progMod:+20, desc:'依存させ絶対的に服従させる' },
+];
+
+/* -------- プレイヤースキル -------- */
+const PLAYER_SKILLS = [
+  { id:'slash',   name:'斬撃',     elem:null,      power:1.0, mpCost:0,  desc:'通常物理攻撃' },
+  { id:'fire',    name:'炎斬',     elem:'fire',    power:1.4, mpCost:8,  desc:'炎属性攻撃' },
+  { id:'ice',     name:'氷刃',     elem:'ice',     power:1.4, mpCost:8,  desc:'氷属性攻撃' },
+  { id:'thunder', name:'雷撃',     elem:'thunder', power:1.4, mpCost:8,  desc:'雷属性攻撃' },
+  { id:'dark',    name:'闇斬',     elem:'dark',    power:1.4, mpCost:8,  desc:'闇属性攻撃' },
+  { id:'light',   name:'光撃',     elem:'light',   power:1.4, mpCost:8,  desc:'光属性攻撃' },
+  { id:'wind',    name:'風刃',     elem:'wind',    power:1.4, mpCost:8,  desc:'風属性攻撃' },
+  { id:'heal',    name:'応急処置', elem:null,      power:0,   mpCost:15, desc:'HP回復', isHeal:true, healValue:30 },
+];
+
 /* -------- プレイヤーユニット -------- */
 const PLAYER_UNIT = {
+  id: 'commander',
   name: '人類抵抗軍指揮官',
-  hp: 60, atk: 14, def: 8, spd: 7,
-  mov: 4, rng: 1,
-  emoji: '🪖',
+  hp: 120, maxHp: 120, mp: 60, maxMp: 60,
+  atk: 14, def: 8, spd: 7,
+  emoji: '🪖', color: '#4488FF',
+  skills: PLAYER_SKILLS,
+  side: 'player', isCommander: true,
 };
 
 /* ======================================================
