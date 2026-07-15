@@ -5,7 +5,8 @@
   "main": "index.html",
   "scripts": {
     "serve": "npx serve . -p 3000 --no-clipboard",
-    "start": "npx serve . -p 3000 --no-clipboard"
+    "start": "npx serve . -p 3000 --no-clipboard",
+    "novel": "node tools/novel-agent/index.js"
   },
   "window": {
     "title": "情報戦略 ～Secret Hearts～",
