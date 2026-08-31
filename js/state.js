@@ -26,6 +26,9 @@ function initGameState() {
     // capturedAngels: { angelId → { pain, obedience, progression, expression, scenesPlayed } }
     capturedAngels: {},
 
+    // 人格排泄兵の初遭遇解説を再生済みか
+    excretorIntroSeen: false,
+
     // ルミエルはチュートリアル後に加入
     allies: [],   // 戦闘パーティに参加できる天使IDリスト
   };

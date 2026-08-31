@@ -137,6 +137,7 @@ const ANGELS = [
           { minTrust:  0, text: '……関係ない。', emotion: 'firm', intelId: null },
           { minTrust: 35, text: '……何千もの命を見た。数えるのをやめた時から、何も感じなくなった。', emotion: 'broken', intelId: null },
           { minTrust: 60, text: '……エルティアの観測塔から、全ての戦場のデータが送られてくる。あの塔が全ての命令を管理している。', emotion: 'resigned', intelId: 'tower_loc' },
+          { minTrust: 75, text: '……廃戦場に転がっている兵。あれは元は誰かだった。人格だけ抜かれて、器が残った。私も……いつかああなる。', emotion: 'broken', intelId: 'excretion_plant' },
         ],
       },
       lumiel: {
@@ -519,6 +520,11 @@ const INTEL_POOL = [
     falseText:'浄化の記録は存在せず、施設は新設されたものという情報。',
     unlocks:[], relevantFor:['assassination'] },
 
+  { id:'excretion_plant',  name:'人格排泄プラント',   cat:'tactical',
+    trueText: '天界は捕縛した存在から人格のみを抽出・廃棄し、残った器を「人格排泄兵」として量産している。排泄された人格は廃棄されず、次の器へ再注入される。',
+    falseText:'人格排泄兵は最初から人格を持たない人工天使であり、元になった存在は存在しないという情報。',
+    unlocks:[], relevantFor:['frontal','sabotage'] },
+
   { id:'end_records',      name:'終末の記録',         cat:'tactical',
     trueText: 'ヴェルナが保管する終末の記録：過去7回の世界リセットの詳細と、次のリセットの準備状況が含まれている。',
     falseText:'終末の記録は既に消去されており、情報価値はないという情報。',
@@ -847,6 +853,61 @@ const PLAYER_UNIT = {
   skills: PLAYER_SKILLS,
   side: 'player', isCommander: true,
 };
+
+/* ======================================================
+   雑魚ユニット定義（RPG戦闘）
+   hp/atk/def は  base + perStage * ステージindex  で算出する
+   ====================================================== */
+const MOB_DEFS = {
+  soldier: {
+    id:'soldier', name:'天界兵', emoji:'👼', color:'#FF9988',
+    hp:50, hpPerStage:25, mp:20, spd:9,
+    atk:10, atkPerStage:3, def:4, defPerStage:2,
+    skills: [],
+    desc:'天界の一般兵。数で押してくるが、個としては脆い。',
+  },
+  elite: {
+    id:'elite', name:'精鋭天使', emoji:'⚔️', color:'#FF6666',
+    hp:45, hpPerStage:20, mp:30, spd:11,
+    atk:12, atkPerStage:3, def:5, defPerStage:2,
+    skills: [],
+    desc:'訓練された前線天使。手数が多く、崩すのに時間がかかる。',
+  },
+  /* ── 人格排泄兵 ─────────────────────────────────────
+     捕縛した存在から「人格」だけを排泄させ、残った器を再利用した量産兵。
+     倒しても排泄された人格は消えず、別の個体へ流れ込んで強化してしまう。 */
+  excretor: {
+    id:'excretor', name:'人格排泄兵', emoji:'🫥', color:'#8FA0B8',
+    hp:62, hpPerStage:22, mp:24, spd:8,
+    atk:11, atkPerStage:3, def:3, defPerStage:1,
+    skills: [
+      { name:'空洞の叫び', elem:'dark', power:1.30, mpCost:8 },
+      { name:'名残の刃',   elem:null,   power:1.15, mpCost:0 },
+    ],
+    onDeath:'excrete',
+    desc:'天界が捕縛した者から人格を「排泄」させ、空になった器だけを再利用した量産兵。名も記憶も持たない。',
+    warn:'最前列に立たされる器。普通に倒すと排泄された人格が後列へ流れ込み、後続の敵を強化してしまう。✨光属性のとどめなら人格ごと浄化でき、流出を防げる。',
+  },
+};
+
+/* -------- ステージごとの雑魚編成（STAGE_ORDER と対応）-------- */
+const STAGE_MOBS = [
+  ['soldier'],                // 0 審判の法廷
+  ['soldier','excretor'],     // 1 殲滅の廃戦場 ← 人格排泄兵 初登場
+  ['soldier','elite'],        // 2 誘惑の庭園
+  ['elite','excretor'],       // 3 観測の尖塔
+  ['elite','excretor'],       // 4 浄化の聖域
+  ['elite','excretor'],       // 5 記憶の廃墟
+  ['excretor','excretor'],    // 6 終末の玉座 ← 排泄兵の壁。連鎖させるとラグナリアが跳ね上がる
+];
+
+/* -------- 人格排泄兵 初遭遇時のルミエルの説明 -------- */
+const EXCRETOR_INTRO = [
+  'ルミエル',
+  'あれは……人格排泄兵です。天界が捕縛した存在から「人格」だけを抜き取って——排泄させて、残った器を兵にしたもの。前に立たされるのは、壊れてもいい器だからです。',
+  '抜かれた人格は消えません。器が壊れると、後ろの個体へ流れ込んで、そいつを強くしてしまう。',
+  'でも……光でとどめを刺せば、人格ごと浄化できます。手間はかかりますけど、そのほうが——たぶん、あの子たちのためにも。',
+];
 
 /* ======================================================
    アイテム定義

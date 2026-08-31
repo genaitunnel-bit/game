@@ -244,7 +244,7 @@ const Scenes = (() => {
   function _lumielHint() {
     const hints = [
       '次はセラフィエルです。感情に訴えると揺れます……。',
-      'ミリエルは沈黙を怖がります。私も知っていました、昔は。',
+      'ミリエルは沈黙を怖がります。私も知っていました、昔は。……あと、廃戦場には人格排泄兵がいます。気をつけて。',
       'アリュシアは読めない人。でも本物の感情には弱いはず。',
       'エルティアは私の元上司です。計算外の変数になってやりましょう。',
       'サンクティアの笑顔は……信じないでください。',
@@ -286,6 +286,28 @@ const Scenes = (() => {
         </div>
         <div style="padding:12px 16px;background:rgba(0,0,0,0.3)">
           <div style="font-size:12px;color:#AAA;line-height:1.7">${angel.desc.substring(0, 100)}…</div>
+        </div>
+      </div>
+
+      <div style="background:rgba(10,4,25,0.8);border:1px solid rgba(200,159,255,0.2);border-radius:12px;padding:14px 16px">
+        <div style="font-size:13px;font-weight:bold;color:#C89FFF;margin-bottom:10px">🛡️ 予想される敵編成</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:26px;filter:drop-shadow(0 0 6px ${angel.color})">${angel.emoji}</span>
+            <div style="min-width:0">
+              <div style="font-size:12px;font-weight:bold;color:${angel.color}">★ ${angel.name}</div>
+              <div style="font-size:10px;color:#666">${angel.title}</div>
+            </div>
+          </div>
+          ${_mobsForStage(G.stage).map(m => `
+          <div style="display:flex;align-items:center;gap:10px">
+            <span style="font-size:24px;filter:drop-shadow(0 0 5px ${m.color})">${m.emoji}</span>
+            <div style="min-width:0">
+              <div style="font-size:12px;font-weight:bold;color:${m.color}">${m.name}</div>
+              <div style="font-size:10px;color:#666;line-height:1.5">${m.desc || ''}</div>
+              ${m.warn ? `<div style="font-size:10px;color:#FFAA66;line-height:1.5;margin-top:2px">⚠️ ${m.warn}</div>` : ''}
+            </div>
+          </div>`).join('')}
         </div>
       </div>
 
@@ -340,6 +362,28 @@ const Scenes = (() => {
     });
   }
 
+  /* 人格排泄兵 初遭遇の解説（ルミエル） */
+  function _showExcretorIntro(next) {
+    const ex = MOB_DEFS.excretor;
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(4,2,12,0.94);z-index:900;display:flex;align-items:center;justify-content:center;padding:20px;font-family:sans-serif';
+    ov.innerHTML = `
+      <div style="max-width:420px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center">
+        <div style="font-size:72px;filter:drop-shadow(0 0 24px ${ex.color})">${ex.emoji}</div>
+        <div style="font-size:18px;font-weight:bold;color:${ex.color}">${ex.name}</div>
+        <div style="background:rgba(184,228,255,0.08);border:1px solid rgba(184,228,255,0.25);border-radius:12px;padding:14px 18px;font-size:13px;color:#CCC;line-height:1.9">
+          ${EXCRETOR_INTRO.slice(1).map(t => `<div style="margin-bottom:8px">「${t}」</div>`).join('')}
+          <div style="font-size:11px;color:#888">— ${EXCRETOR_INTRO[0]}</div>
+        </div>
+        <div style="background:rgba(255,170,102,0.1);border:1px solid rgba(255,170,102,0.3);border-radius:10px;padding:10px 14px;font-size:11px;color:#FFAA66;line-height:1.7">
+          ⚠️ ${ex.warn}
+        </div>
+        <button class="btn btn-pink btn-lg" id="btn-excretor-ok">了解した</button>
+      </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#btn-excretor-ok').onclick = () => { ov.remove(); next(); };
+  }
+
   function _showFlash(title, msg, color) {
     const el = document.createElement('div');
     el.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(10,4,25,0.97);border:1px solid ${color};border-radius:14px;padding:20px 32px;text-align:center;z-index:999;font-family:sans-serif;pointer-events:none`;
@@ -356,6 +400,13 @@ const Scenes = (() => {
     const loc   = getLocation(locId);
     const angel = loc ? getAngel(loc.angelId) : null;
     if (!angel) { G.phase = 'stage_select'; render(); return; }
+
+    // 人格排泄兵の初遭遇時はルミエルの解説を挟む
+    if (!G.excretorIntroSeen && _mobsForStage(G.stage).some(m => m.onDeath === 'excrete')) {
+      G.excretorIntroSeen = true;
+      _showExcretorIntro(() => _startRPGBattle());
+      return;
+    }
 
     // パーティ構築（指揮官 + 鹵獲済み天使）
     const party = [Object.assign({}, PLAYER_UNIT, {
@@ -383,16 +434,16 @@ const Scenes = (() => {
     const bossHp  = Math.round(angel.hp * (6 + si * 1.5));
     const bossAtk = Math.max(18, angel.atk) + si * 3;
     const bossDef = 20 + si * 2;
-    const enemies = [{
+    // 前衛＝雑魚（人格排泄兵が最前列）、後衛＝ボス の順に並べる。
+    // 戦闘は配列の先頭から順に狙うため、排泄兵は必ずボスより先に倒すことになる。
+    const enemies = _mobsForStage(si).map((mob, i) => _buildMob(mob, si, i));
+    enemies.push({
       id: 'boss', name: angel.name, emoji: angel.emoji, color: angel.color,
       hp: bossHp, maxHp: bossHp, mp: 80, maxMp: 80,
       atk: bossAtk, def: bossDef, spd: angel.spd,
       skills: (ANGEL_BATTLE_SKILLS[angel.id] || []).map(sk => ({ ...sk })),
       side: 'enemy', isBoss: true,
-    }];
-    // ステージ0から雑魚天使を追加
-    enemies.push({ id: 'g1', name: '天界兵',   emoji: '👼', color: '#FF9988', hp: 50 + si * 25, maxHp: 50 + si * 25, mp: 20, maxMp: 20, atk: 10 + si * 3, def: 4 + si * 2, spd: 9,  skills: [], side: 'enemy' });
-    if (si >= 2) enemies.push({ id: 'g2', name: '精鋭天使', emoji: '⚔️', color: '#FF6666', hp: 45 + si * 20, maxHp: 45 + si * 20, mp: 30, maxMp: 30, atk: 12 + si * 3, def: 5 + si * 2, spd: 11, skills: [], side: 'enemy' });
+    });
 
     G.phase = 'battle';
     document.getElementById('root').innerHTML = '';
@@ -425,6 +476,30 @@ const Scenes = (() => {
         render();
       },
     });
+  }
+
+  /* ステージ index に対応する雑魚編成を返す */
+  function _mobsForStage(si) {
+    const list = STAGE_MOBS[Math.min(si, STAGE_MOBS.length - 1)] || ['soldier'];
+    const defs = list.map(id => MOB_DEFS[id]).filter(Boolean);
+    // 人格排泄兵は器として前に立たされる＝最前列に並べる
+    return defs.filter(d => d.onDeath === 'excrete')
+               .concat(defs.filter(d => d.onDeath !== 'excrete'));
+  }
+
+  /* MOB_DEFS からステージ補正済みの戦闘ユニットを生成 */
+  function _buildMob(def, si, i) {
+    const hp  = def.hp  + (def.hpPerStage  || 0) * si;
+    const atk = def.atk + (def.atkPerStage || 0) * si;
+    const dfn = def.def + (def.defPerStage || 0) * si;
+    return {
+      id: `m${i}_${def.id}`, name: def.name, emoji: def.emoji, color: def.color,
+      hp, maxHp: hp, mp: def.mp || 20, maxMp: def.mp || 20,
+      atk, def: dfn, spd: def.spd,
+      skills: (def.skills || []).map(sk => ({ ...sk })),
+      onDeath: def.onDeath || null,
+      side: 'enemy',
+    };
   }
 
   function _allyBattleStats(angelId) {

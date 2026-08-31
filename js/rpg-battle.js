@@ -40,6 +40,7 @@ const RPGBattle = (() => {
       items:  [...(config.items || [])],
       turn:   1,
       log:    ['戦闘開始！'],
+      deathLog: [],
       activeIdx: 0,
     };
     while (S.activeIdx < S.party.length && S.party[S.activeIdx].dead) S.activeIdx++;
@@ -129,7 +130,9 @@ const RPGBattle = (() => {
       hbt.textContent = `${e.hp}/${e.maxHp}`;
       const nm = w.appendChild(document.createElement('div'));
       nm.style.cssText = `font-size:10px;color:${ec};font-weight:bold;text-align:center;white-space:nowrap`;
-      nm.textContent = e.isBoss ? `★ ${e.name}` : e.name;
+      const poss = e.possessed ? '◆'.repeat(Math.min(e.possessed, 4)) + ' ' : '';
+      nm.textContent = poss + (e.isBoss ? `★ ${e.name}` : e.name);
+      if (e.possessed) nm.title = `人格を ${e.possessed} 体分 取り込んでいる（攻撃力上昇）`;
     });
 
     // バトルログ（中央上）
@@ -285,7 +288,7 @@ const RPGBattle = (() => {
       _hit(t, dmg);
       _log(`${unit.name}の攻撃！ ${t.name}に ${dmg} ダメージ！`);
       if (t.dead) _log(`${t.name}を倒した！`);
-      _afterAction();
+      _drainDeathLog(_afterAction);
     });
   }
 
@@ -301,21 +304,23 @@ const RPGBattle = (() => {
     const isWk = sk.elem && S.weaknesses.includes(sk.elem);
     if (isWk) dmg = Math.floor(dmg * 1.6);
     _anim(unit, t, dmg, sk.elem, () => {
-      _hit(t, dmg);
+      _hit(t, dmg, sk.elem);
       const ed = sk.elem ? ELEM_DATA[sk.elem] : null;
       _log(`${unit.name}の${ed?ed.icon:''}${sk.name}！ ${t.name}に ${dmg} ダメージ${isWk?' 【弱点！】':''}！`);
       if (t.dead) _log(`${t.name}を倒した！`);
-      _afterAction();
+      _drainDeathLog(_afterAction);
     });
   }
 
   function _doGuard(unit) {
+    if (_busy) return;
     unit.guard = true;
     _log(`${unit.name}は防御した！`);
     _render(); _nextPlayer();
   }
 
   function _doItem(item) {
+    if (_busy) return;
     if (item.effect === 'heal') {
       const t = S.party.filter(u=>!u.dead).sort((a,b)=>(a.hp/a.maxHp)-(b.hp/b.maxHp))[0];
       if (t) { t.hp = Math.min(t.maxHp, t.hp+(item.value||50)); _log(`${item.icon} ${item.name}！ ${t.name}を ${item.value||50} 回復！`); }
@@ -325,7 +330,8 @@ const RPGBattle = (() => {
     } else if (item.effect === 'bomb') {
       S.enemies.filter(e=>!e.dead).forEach(e => { _hit(e, item.value||40); _log(`爆弾！ ${e.name}に ${item.value||40} ダメージ！`); });
     }
-    _render(); _nextPlayer();
+    _render();
+    _drainDeathLog(() => { if (!_checkEnd()) _nextPlayer(); });
   }
 
   function _afterAction() {
@@ -450,7 +456,50 @@ const RPGBattle = (() => {
     }, 320);
   }
 
-  function _hit(unit, dmg) { unit.hp = Math.max(0, unit.hp-dmg); if (unit.hp===0) unit.dead = true; }
+  function _hit(unit, dmg, elem) {
+    unit.hp = Math.max(0, unit.hp-dmg);
+    if (unit.hp === 0 && !unit.dead) { unit.dead = true; _onDeath(unit, elem || null); }
+  }
+
+  /* ── 撃破時の特殊効果 ──────────────────────────────
+     人格排泄兵：器が壊れると、排泄された人格が生き残った別の敵へ流れ込む。
+     憑依された敵は攻撃力が上がり、HPも少し回復する。 */
+  function _onDeath(unit, elem) {
+    if (!S || unit.side !== 'enemy' || unit.onDeath !== 'excrete') return;
+
+    // 光属性のとどめは、排泄された人格ごと浄化する
+    if (elem === 'light') {
+      S.deathLog.push(`✨ ${unit.name}は光に還った。排泄された人格も一緒に浄化された。`);
+      return;
+    }
+
+    // 後列（配列上の次）の生存個体へ流れ込む
+    const idx  = S.enemies.indexOf(unit);
+    const rest = S.enemies.filter((e, i) => !e.dead && i > idx);
+    const host = rest[0] || S.enemies.find(e => !e.dead && e !== unit);
+    if (!host) {
+      S.deathLog.push(`${unit.name}の器が砕けた。排泄された人格は、流れ込む先を失って消えた。`);
+      return;
+    }
+    host.possessed = (host.possessed || 0) + 1;
+    host.atk = Math.round(host.atk * 1.20);
+    host.hp  = Math.min(host.maxHp, host.hp + Math.round(host.maxHp * 0.12));
+    S.deathLog.push(`💧 排泄——${unit.name}から溢れた人格が ${host.name} に流れ込んだ！ 攻撃力上昇！`);
+  }
+
+  /* 撃破時メッセージを表示しきってから次の処理へ進む */
+  function _drainDeathLog(next) {
+    if (!S || !S.deathLog.length) { next(); return; }
+    const msgs = S.deathLog.splice(0);
+    _busy = true;
+    (function show(i) {
+      if (!S) return;
+      if (i >= msgs.length) { _busy = false; next(); return; }
+      _log(msgs[i]);
+      _render();
+      setTimeout(() => show(i + 1), 1000);
+    })(0);
+  }
   function _liveEnemy() { return S.enemies.find(e=>!e.dead); }
   function _log(txt) { if (S) { S.log.push(txt); const l = document.getElementById('rpg-log'); if (l) l.textContent = txt; } }
 
