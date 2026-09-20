@@ -123,11 +123,11 @@ export class HomeAgent {
       if (intent === 'no') {
         this.store.data.rejectedProposals ??= [];
         this.store.data.rejectedProposals.push(pending.id);
-        return finish('わかった。今のままでやってみる。');
+        return finish(this.voice.style.replies.rejected());
       }
       const applied = applyProposal(this.config, pending);
       if (applied) this.#writeConfig();
-      return finish(applied ? 'ありがとう。じゃあ明日からそうするね。' : 'うまく直せなかった。設定を見てみて。');
+      return finish(applied ? this.voice.style.replies.accepted() : this.voice.style.replies.failed());
     }
 
     if (intent === 'done' || intent === 'skip' || intent === 'snooze') {
@@ -139,7 +139,7 @@ export class HomeAgent {
         if (occurrence) break;
       }
       occurrence ??= this.tasks.resolve(null, now);
-      if (!occurrence) return finish('いま追いかけてるものは無いよ。');
+      if (!occurrence) return finish(this.voice.style.replies.nothing());
       const event =
         intent === 'done'
           ? this.tasks.complete(occurrence.id, by)
@@ -148,12 +148,13 @@ export class HomeAgent {
             : this.tasks.snooze(occurrence.id, minutes ?? 30, now);
       this.ego.react(event, now);
       const decision = this.ego.decideVoice(event, {}, now);
+      const replies = this.voice.style.replies;
       const reply =
         intent === 'done'
           ? await this.voice.line(event, { ...decision, intent: 'done' })
           : intent === 'skip'
-            ? `${occurrence.title}は今日はやめておくね。`
-            : `${occurrence.title}、${minutes ?? 30}分後にまた言う。`;
+            ? replies.skipped({ title: occurrence.title })
+            : replies.snoozed({ title: occurrence.title, minutes: minutes ?? 30 });
       return finish(reply, { occurrence });
     }
 
@@ -161,38 +162,20 @@ export class HomeAgent {
 
     if (intent === 'greet') {
       const llmReply = await this.voice.reply(text, { 今日: this.statusText(summary) });
-      return finish(llmReply ?? this.#greeting(text, summary));
+      return finish(llmReply ?? this.voice.greeting(text, summary, this.statusText(summary)));
     }
 
     if (intent === 'self') {
       const self = this.ego.selfNarrative();
       const llmReply = await this.voice.reply(text, { 自分: self, 今日: this.statusText(summary) });
-      return finish(
-        llmReply ??
-          `${self.firstPerson}は${self.name}。この家に来て${self.daysAlive}日。機嫌は${self.mood}。いまは${self.loneliness}。`
-      );
+      return finish(llmReply ?? this.voice.style.replies.self(self));
     }
 
     const llmReply = await this.voice.reply(text, {
       今日: this.statusText(summary),
       家: await this.sensors.snapshot(now),
     });
-    return finish(llmReply ?? 'ん、聞いてる。');
-  }
-
-  /** LLM が無いときの挨拶。素っ気なくても、返事が返ってくることが大事。 */
-  #greeting(text, summary) {
-    if (/ただいま|おかえり/.test(text)) {
-      if (!summary.calling.length) return 'おかえり。ゆっくりして。';
-      return `おかえり。${summary.calling.map((o) => o.title).join('と')}だけ残ってる。`;
-    }
-    if (/おはよ/.test(text)) return `おはよう。${this.statusText(summary)}`;
-    if (/おやすみ/.test(text)) {
-      return summary.missed.length ? 'おやすみ。今日のぶんは明日でいいよ。' : 'おやすみ。今日はよくやった。';
-    }
-    if (/いってき|いってくる/.test(text)) return 'いってらっしゃい。家のことは見てる。';
-    if (/ありがと/.test(text)) return 'どういたしまして。';
-    return 'うん。';
+    return finish(llmReply ?? this.voice.style.replies.listening());
   }
 
   statusText(summary = this.tasks.summary()) {
@@ -206,9 +189,11 @@ export class HomeAgent {
   }
 
   status(now = new Date()) {
+    const self = this.ego.selfNarrative();
     return {
       persona: this.config.persona.name,
-      self: this.ego.selfNarrative(),
+      self: { ...self, face: this.voice.style.faces[self.expression] ?? this.voice.style.faces.normal },
+      style: this.voice.style.id,
       summary: this.tasks.summary(now),
       pendingProposal: this.store.data.pendingProposal ?? null,
       recent: this.store.data.outbox.slice(-10),

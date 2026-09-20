@@ -187,6 +187,17 @@ export class Ego {
     return entry;
   }
 
+  /** いまの顔。画面に出す表情のキーで、口調スタイルが実際の顔文字に変換する。 */
+  expression() {
+    const s = this.state;
+    if (s.frustration > 0.6) return 'sulky';
+    if (s.energy < 0.35) return 'sleepy';
+    if (s.loneliness > 0.75) return 'lonely';
+    if (s.mood > 0.7) return 'happy';
+    if (s.mood < 0.35) return 'sad';
+    return 'normal';
+  }
+
   /** 自分についての要約。LLM への自己説明にも、「あなたは誰？」への答えにもこれを使う。 */
   selfNarrative() {
     const s = this.state;
@@ -194,6 +205,7 @@ export class Ego {
     const word = (v, low, mid, high) => (v < 0.35 ? low : v < 0.7 ? mid : high);
     return {
       name: this.persona.name,
+      expression: this.expression(),
       firstPerson: this.persona.firstPerson ?? 'わたし',
       daysAlive: days,
       mood: word(s.mood, '沈んでいる', 'ふつう', 'いい'),

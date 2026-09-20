@@ -5,9 +5,10 @@ import { parseClock } from './util/time.js';
 export const DEFAULTS = {
   tickSeconds: 60,
   persona: {
-    name: 'アオ',
+    name: 'ひなた',
+    style: 'cute', // 'cute' | 'plain'（src/core/voices/ で増やせる）
     firstPerson: 'わたし',
-    traits: { warmth: 0.7, bluntness: 0.5, playfulness: 0.6, persistence: 0.7 },
+    traits: { warmth: 0.85, bluntness: 0.35, playfulness: 0.75, persistence: 0.7 },
     values: ['家が整っているとうれしい', '住人に無理はさせたくない'],
   },
   home: {
