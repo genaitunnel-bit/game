@@ -8,6 +8,38 @@ import { logger } from '../util/log.js';
 const log = logger('server');
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MAX_BODY = 64 * 1024;
+const WEB_DIR = path.resolve(here, '../../web');
+
+// 画面まわりのファイルだけを配る。ここに無い拡張子は返さない。
+const TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.woff2': 'font/woff2',
+  '.json': 'application/json; charset=utf-8',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+};
+
+function serveStatic(res, pathname) {
+  const file = path.resolve(WEB_DIR, pathname.replace(/^\/+/, ''));
+  // web/ の外へ出る細工（../ や symlink まがいのパス）は弾く
+  if (file !== WEB_DIR && !file.startsWith(WEB_DIR + path.sep)) return false;
+  const type = TYPES[path.extname(file)];
+  if (!type) return false;
+  let body;
+  try {
+    if (!fs.statSync(file).isFile()) return false;
+    body = fs.readFileSync(file);
+  } catch {
+    return false;
+  }
+  res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
+  res.end(body);
+  return true;
+}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -57,14 +89,16 @@ export function startServer({ agent, config }) {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
     try {
-      if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/index.html')) {
-        return send(res, 200, fs.readFileSync(path.join(here, '../../web/index.html'), 'utf8'));
+      if (req.method === 'GET') {
+        const pathname = url.pathname === '/' ? '/index.html' : url.pathname;
+        if (!pathname.startsWith('/api/') && serveStatic(res, pathname)) return;
       }
       if (req.method === 'POST' && url.pathname === '/alexa') {
         const body = await readBody(req);
         const { status, payload } = await handleAlexa(body, { agent, skillId });
         return send(res, status, payload);
       }
+      if (!url.pathname.startsWith('/api/')) return send(res, 404, { error: 'not found' });
       if (!authorized(req, url)) return send(res, 401, { error: 'unauthorized' });
 
       if (req.method === 'GET' && url.pathname === '/api/state') {
