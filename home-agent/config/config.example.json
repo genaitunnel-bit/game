@@ -1,0 +1,122 @@
+{
+  "tickSeconds": 60,
+  "persona": {
+    "name": "アオ",
+    "firstPerson": "わたし",
+    "traits": { "warmth": 0.75, "bluntness": 0.45, "playfulness": 0.6, "persistence": 0.7 },
+    "values": [
+      "家が整っているとうれしい",
+      "住人に無理はさせたくない",
+      "言われたことをなぞるだけの存在ではいたくない"
+    ]
+  },
+  "home": {
+    "timezone": "Asia/Tokyo",
+    "quietHours": { "from": "23:00", "to": "07:00" },
+    "location": { "lat": 35.681, "lon": 139.767 },
+    "residents": [
+      { "id": "yuki", "name": "ゆき", "devices": ["192.168.1.23"] }
+    ]
+  },
+  "tasks": [
+    {
+      "id": "trash-burnable",
+      "title": "燃えるゴミ出し",
+      "emoji": "🗑️",
+      "schedule": { "type": "weekly", "days": ["mon", "thu"], "at": "07:00" },
+      "deadline": "08:00",
+      "importance": 5,
+      "assignee": "yuki",
+      "nag": { "intervalMinutes": 10, "max": 4 },
+      "conditions": { "requireHome": true },
+      "prep": { "title": "ゴミをまとめて玄関へ", "at": "21:30", "offsetDays": -1 }
+    },
+    {
+      "id": "trash-plastic",
+      "title": "プラごみ出し",
+      "emoji": "♻️",
+      "schedule": { "type": "weekly", "days": ["tue"], "at": "07:00" },
+      "deadline": "08:00",
+      "importance": 4,
+      "nag": { "intervalMinutes": 15, "max": 3 }
+    },
+    {
+      "id": "laundry",
+      "title": "洗濯",
+      "emoji": "🧺",
+      "schedule": { "type": "daily", "at": "08:30" },
+      "deadline": "13:00",
+      "importance": 3,
+      "conditions": { "requireHome": true, "skipIf": ["weather.rain"] },
+      "nag": { "intervalMinutes": 30, "max": 2 }
+    },
+    {
+      "id": "laundry-hang",
+      "title": "洗濯物を干す",
+      "emoji": "👕",
+      "schedule": { "type": "sensor", "when": "laundry.state == done" },
+      "deadlineMinutes": 90,
+      "importance": 4,
+      "nag": { "intervalMinutes": 10, "max": 4 }
+    },
+    {
+      "id": "tidy-living",
+      "title": "リビングの片付け",
+      "emoji": "🧹",
+      "schedule": { "type": "daily", "at": "21:00" },
+      "deadline": "23:00",
+      "importance": 2,
+      "conditions": { "requireHome": true },
+      "nag": { "intervalMinutes": 25, "max": 2 }
+    },
+    {
+      "id": "bath-clean",
+      "title": "お風呂掃除",
+      "emoji": "🛁",
+      "schedule": { "type": "interval", "everyDays": 3, "at": "19:00" },
+      "deadline": "22:00",
+      "importance": 3
+    },
+    {
+      "id": "filter-clean",
+      "title": "エアコンのフィルター掃除",
+      "emoji": "❄️",
+      "schedule": { "type": "monthly", "dates": [1], "at": "10:00" },
+      "deadline": "20:00",
+      "importance": 2
+    }
+  ],
+  "sensors": {
+    "presence": { "enabled": true, "method": "ping" },
+    "weather": { "enabled": true }
+  },
+  "channels": {
+    "console": { "enabled": true },
+    "ntfy": {
+      "enabled": false,
+      "server": "https://ntfy.sh",
+      "topic": "CHANGE-ME-home-agent-xxxx",
+      "priorityByImportance": true
+    },
+    "alexa": {
+      "enabled": false,
+      "notifyMeAccessCode": "",
+      "speakOnlyWhenHome": true
+    },
+    "termux": { "enabled": false, "speak": true }
+  },
+  "llm": {
+    "enabled": true,
+    "provider": "anthropic",
+    "model": "claude-opus-5",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "maxTokens": 300
+  },
+  "server": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 8787,
+    "tokenEnv": "HOME_AGENT_TOKEN"
+  },
+  "storePath": "data/state.json"
+}

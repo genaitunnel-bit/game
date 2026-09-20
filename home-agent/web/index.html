@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111417">
+<title>家のエージェント</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --card: #ffffff; --ink: #1b1d20; --muted: #6c7278;
+    --line: #e3e3df; --accent: #3a7d6a; --warn: #b4593a; --chip: #ecece8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111417; --card: #191d21; --ink: #e8e8e4; --muted: #8b9198;
+      --line: #262b30; --accent: #6fbfa5; --warn: #e08a68; --chip: #232830;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.7 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+    max-width: 640px; margin-inline: auto;
+  }
+  h1 { font-size: 17px; margin: 0; letter-spacing: .04em; }
+  .head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .mood { color: var(--muted); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; margin-top: 12px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .row .t { flex: 1; min-width: 0; }
+  .row .t b { font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .t span { color: var(--muted); font-size: 12px; }
+  button {
+    font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--chip); color: var(--ink); cursor: pointer;
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .chip { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .chip.calling { color: var(--warn); }
+  .chip.done { color: var(--accent); }
+  h2 { font-size: 12px; color: var(--muted); margin: 0 0 8px; font-weight: 600; letter-spacing: .08em; }
+  .log { color: var(--muted); font-size: 13px; }
+  .log div { padding: 3px 0; }
+  form { display: flex; gap: 8px; margin-top: 12px; }
+  input {
+    flex: 1; font: inherit; padding: 11px 14px; border-radius: 999px;
+    border: 1px solid var(--line); background: var(--card); color: var(--ink);
+  }
+  .said { margin-top: 10px; padding: 11px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+  .empty { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+  <div class="head"><h1 id="name">…</h1><span class="mood" id="mood"></span></div>
+
+  <div class="card"><h2>きょう</h2><div id="tasks"><div class="empty">読み込み中…</div></div></div>
+  <div class="card"><h2>さっき言ったこと</h2><div class="log" id="log"></div></div>
+  <div class="card"><h2>日記</h2><div class="log" id="diary"></div></div>
+
+  <form id="chat"><input id="text" placeholder="話しかける（例: ゴミ出しやった）" autocomplete="off"><button class="primary">送信</button></form>
+  <div class="said" id="said" hidden></div>
+
+<script>
+const token = new URLSearchParams(location.search).get('token') || localStorage.getItem('home-agent-token') || '';
+if (token) localStorage.setItem('home-agent-token', token);
+const auth = token ? { Authorization: 'Bearer ' + token } : {};
+const clock = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+const LABEL = { calling: '呼びかけ中', pending: 'このあと', done: '完了', missed: 'こぼれた', 'auto-skipped': '見送り' };
+
+async function api(path, options = {}) {
+  const res = await fetch(path, { ...options, headers: { 'Content-Type': 'application/json', ...auth, ...(options.headers || {}) } });
+  if (res.status === 401) { document.body.innerHTML = '<p>トークンが必要です。?token=... を付けて開いてください。</p>'; throw new Error('401'); }
+  return res.json();
+}
+
+function taskRow(occ, status) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `<span class="chip ${status}">${LABEL[status] || status}</span>
+    <div class="t"><b>${occ.emoji || ''}${occ.title}</b><span>${clock(occ.dueMinutes)} まで ${clock(occ.deadlineMinutes)}</span></div>`;
+  if (status === 'calling' || status === 'pending' || status === 'missed') {
+    const done = document.createElement('button');
+    done.className = 'primary'; done.textContent = 'やった';
+    done.onclick = async () => { await api(`/api/occurrences/${encodeURIComponent(occ.id)}/done`, { method: 'POST' }); load(); };
+    const later = document.createElement('button');
+    later.textContent = '30分';
+    later.onclick = async () => { await api(`/api/occurrences/${encodeURIComponent(occ.id)}/snooze?minutes=30`, { method: 'POST' }); load(); };
+    row.append(done, later);
+  }
+  return row;
+}
+
+async function load() {
+  const state = await api('/api/state');
+  name.textContent = state.persona;
+  const s = state.self;
+  mood.textContent = `機嫌は${s.mood}・${s.loneliness}・${s.daysAlive}日目`;
+
+  tasks.replaceChildren();
+  const groups = [['calling', state.summary.calling], ['pending', state.summary.upcoming],
+                  ['missed', state.summary.missed], ['done', state.summary.done], ['auto-skipped', state.summary.autoSkipped]];
+  let count = 0;
+  for (const [status, list] of groups) for (const occ of list) { tasks.append(taskRow(occ, status)); count++; }
+  if (!count) tasks.innerHTML = '<div class="empty">今日はとくに何もありません。</div>';
+
+  log.replaceChildren(...state.recent.slice().reverse().map((e) => {
+    const div = document.createElement('div');
+    div.textContent = `${e.at.slice(11, 16)}  ${e.text}`;
+    return div;
+  }));
+  if (!state.recent.length) log.innerHTML = '<div class="empty">まだ何も言っていません。</div>';
+
+  diary.replaceChildren(...state.diary.slice().reverse().map((d) => {
+    const div = document.createElement('div');
+    div.textContent = `${d.date}  ${d.text}`;
+    return div;
+  }));
+  if (!state.diary.length) diary.innerHTML = '<div class="empty">まだ一日を終えていません。</div>';
+
+  if (state.pendingProposal) {
+    const div = document.createElement('div');
+    div.className = 'empty';
+    div.textContent = `提案: ${state.pendingProposal.text}（「うん」か「いや」で答えてください）`;
+    tasks.append(div);
+  }
+}
+
+chat.onsubmit = async (event) => {
+  event.preventDefault();
+  const value = text.value.trim();
+  if (!value) return;
+  text.value = '';
+  const { reply } = await api('/api/say', { method: 'POST', body: JSON.stringify({ text: value }) });
+  said.hidden = false;
+  said.textContent = reply;
+  load();
+};
+
+load();
+setInterval(load, 20000);
+</script>
+</body>
+</html>
