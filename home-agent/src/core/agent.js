@@ -178,6 +178,11 @@ export class HomeAgent {
     return finish(llmReply ?? this.voice.style.replies.listening());
   }
 
+  /** 声だけで返す（通知には積まない）。音声で話しかけられたときの返事に使う。 */
+  async sayAloud(text, { now = new Date() } = {}) {
+    return this.channels.sayAloud(text, { now });
+  }
+
   statusText(summary = this.tasks.summary()) {
     const line = (occ) => `${occ.title}（${formatClock(occ.dueMinutes)}）`;
     const parts = [];

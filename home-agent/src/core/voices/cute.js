@@ -53,6 +53,7 @@ export default {
     accepted: () => 'ありがとっ！　じゃあ明日からそうするね。',
     rejected: () => 'わかった。いまのままでやってみるね。',
     failed: () => 'うまく直せなかった……ごめん、設定を見てみて。',
+    summoned: () => 'なぁに？',
     listening: () => 'ん、聞いてるよ。',
     self: (s) => `${s.firstPerson}は${s.name}。このおうちに来て${s.daysAlive}日だよ。機嫌は${s.mood}。いまは${s.loneliness}。`,
   },

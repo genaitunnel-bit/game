@@ -1,6 +1,7 @@
 import { loadConfig } from './config.js';
 import { HomeAgent } from './core/agent.js';
 import { startServer } from './server/http.js';
+import { EarHub } from './ears/index.js';
 import { logger } from './util/log.js';
 
 const log = logger('main');
@@ -9,6 +10,10 @@ async function main() {
   const config = loadConfig(process.argv[2] ?? undefined);
   const agent = new HomeAgent(config);
   log.info(`${config.persona.name} を起動しました（タスク ${config.tasks.length} 件 / ${config.tickSeconds} 秒ごとに家を見ます）`);
+
+  const ears = new EarHub({ config, agent });
+  agent.ears = ears; // サーバ（ブラウザの耳）からも同じ判断を通す
+  ears.start();
 
   if (config.server?.enabled) startServer({ agent, config });
 
@@ -32,6 +37,7 @@ async function main() {
   const stop = (signal) => {
     log.info(`${signal} を受け取りました。状態を保存して終了します`);
     clearInterval(timer);
+    ears.stop();
     agent.store.save();
     process.exit(0);
   };

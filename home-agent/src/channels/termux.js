@@ -18,6 +18,7 @@ export class TermuxChannel {
     this.speak = options.speak !== false;
     this.personaName = config?.persona?.name ?? 'home-agent';
     this.name = 'termux';
+    this.speaks = options.speak !== false; // 端末に喋らせる設定なら、返事の読み上げにも使う
   }
 
   async send(message) {

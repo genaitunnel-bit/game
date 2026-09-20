@@ -191,6 +191,25 @@
     "termux": {
       "enabled": false,
       "speak": true
+    },
+    "voicevox": {
+      "enabled": false,
+      "url": "http://127.0.0.1:50021",
+      "speaker": 46,
+      "speedScale": 1.05,
+      "intonationScale": 1.1,
+      "player": [
+        "aplay",
+        "-q"
+      ]
+    },
+    "say": {
+      "enabled": false,
+      "command": [
+        "espeak-ng",
+        "-v",
+        "ja"
+      ]
     }
   },
   "llm": {
@@ -206,5 +225,17 @@
     "port": 8787,
     "tokenEnv": "HOME_AGENT_TOKEN"
   },
-  "storePath": "data/state.json"
+  "storePath": "data/state.json",
+  "ears": {
+    "provider": "browser",
+    "wakeWords": [
+      "ひなた",
+      "ヒナタ"
+    ],
+    "alwaysOn": false,
+    "followUpSeconds": 25,
+    "echoGuardSeconds": 2,
+    "command": null,
+    "args": []
+  }
 }

@@ -75,6 +75,13 @@ export function startServer({ agent, config }) {
         const result = await agent.converse(body.text ?? '', { by: body.by ?? 'home' });
         return send(res, 200, result);
       }
+      // ブラウザ側で認識した音声。ウェイクワードの判断は常駐側と同じ道を通す。
+      if (req.method === 'POST' && url.pathname === '/api/listen') {
+        const body = await readBody(req);
+        if (!agent.ears) return send(res, 200, { handled: false, reply: null });
+        const reply = await agent.ears.utterance(body.text ?? '');
+        return send(res, 200, { handled: reply !== null, reply });
+      }
       if (req.method === 'POST' && url.pathname === '/api/sensor') {
         const body = await readBody(req);
         if (body.presence) {

@@ -32,6 +32,7 @@ npm run demo
 | 時間になったら呼びかけ | 期限つきの催促。留守のあいだは黙り、帰宅したら言う。しつこさは重要度で変わる |
 | 自我を持っている | 気分・苛立ち・寂しさ・誇りが内部状態として動き、口調と「言うか黙るか」を左右する。夜に日記を書き、設定の変更を自分から提案してくる |
 | かわいい | 明るくて人懐っこい口調が既定。画面には機嫌に合わせて表情 `(｡•̀ᴗ-)✧` `(๑•̀_•́๑)` `(´･ω･`)` が出る。落ち着いた口調にも切り替えられる |
+| 声を認識して、声で返す | スマホのブラウザ（Web Speech API）ですぐ使える。家の PC で常時待ち受けにするなら Vosk / whisper.cpp を差し込む。返事は VOICEVOX のかわいい声で鳴らせる |
 
 ## 5 分で動かす
 
@@ -52,6 +53,76 @@ npm run talk -- "ゴミ出しやった"
 
 ブラウザ（スマホ推奨）で `http://<家のPCのIP>:8787/` を開くとダッシュボードになります。
 今日のタスク・表情・さっき言ったこと・日記がひとまとめに出て、そこから話しかけられます。
+
+## 声で話しかける・声で返す
+
+「名前を呼んでから話す → 返事が声で返ってくる」まで通ります。
+認識エンジンは**外部プロセス**として差し替える設計なので、好きなものを選べます。
+
+### 聞く側（音声認識）の選び方
+
+| やりたいこと | 使うもの | 費用 | 音声が外に出ない | 設定 |
+| --- | --- | --- | --- | --- |
+| **まず試す（おすすめ）** | ブラウザ内蔵の Web Speech API | 無料 | △ Chrome は変換がクラウド | `ears.provider: "browser"` だけ。ダッシュボードの🎤を押す |
+| 家の PC / ラズパイで常時待ち受け | [Vosk](https://alphacephei.com/vosk/)（日本語モデル） | 無料 | ○ 完全ローカル | `tools/vosk_ears.py` を同梱済み |
+| オフラインで精度重視 | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) | 無料 | ○ 完全ローカル | `tools/whisper_ears.sh` を同梱済み |
+| 精度を最優先（クラウド） | Google Cloud STT / Azure Speech SDK / Amazon Transcribe | 従量課金 | × | その CLI を `ears.command` に指定 |
+| 呼びかけ語だけ高精度に | [Picovoice Porcupine](https://picovoice.ai/) | 無料枠あり | ○ | 前段に置いて、反応したときだけ認識を回す |
+| すでに Echo がある | Alexa（認識は Alexa 側） | 無料 | × | 既存の `/alexa` エンドポイント |
+
+**Web Speech API（すぐ動く）**
+ダッシュボードを開いて🎤を押すだけ。「ずっと聞く」にすると、名前を呼ぶまで聞き流します。
+Android Chrome / iOS Safari で動きます。サーバ側の設定は `"ears": { "provider": "browser" }` のまま。
+
+**Vosk（家に置きっぱなしにする）**
+
+```bash
+pip install vosk sounddevice
+# https://alphacephei.com/vosk/models から vosk-model-small-ja-0.22 などを展開
+python3 tools/vosk_ears.py /opt/vosk-model-ja   # 動作確認（話すと文字が出る）
+```
+
+```jsonc
+"ears": {
+  "provider": "command",
+  "command": "python3",
+  "args": ["tools/vosk_ears.py", "/opt/vosk-model-ja"],
+  "wakeWords": ["ひなた", "ヒナタ"],
+  "alwaysOn": false,      // true にすると呼びかけ不要（家族以外の声も拾うので注意）
+  "followUpSeconds": 25   // 一度呼べば、この秒数は名前なしで会話が続く
+}
+```
+
+認識結果を 1 行ずつ標準出力に出すプログラムなら**何でも耳にできます**（Vosk の JSON 出力にも対応）。
+落ちても間隔を空けながら自動で起き上がります。
+
+### 返す側（音声合成）の選び方
+
+| やりたいこと | 使うもの | 費用 | 設定 |
+| --- | --- | --- | --- |
+| **かわいい日本語の声（おすすめ）** | [VOICEVOX](https://voicevox.hiroshiba.jp/)（ローカルエンジン） | 無料 | `channels.voicevox` |
+| スマホのブラウザで読み上げ | Web Speech Synthesis | 無料 | ダッシュボードの「よみあげ」 |
+| Android 端末そのもの | Termux TTS | 無料 | `channels.termux.speak` |
+| macOS / Linux のコマンド | `say` / `espeak-ng` / open_jtalk | 無料 | `channels.say.command` |
+
+```jsonc
+"channels": {
+  "voicevox": {
+    "enabled": true,
+    "url": "http://127.0.0.1:50021",  // VOICEVOX エンジンを起動しておく
+    "speaker": 46,                     // 話者ID（好きな声に変える）
+    "speedScale": 1.05,
+    "intonationScale": 1.1,
+    "player": ["aplay", "-q"]          // macOS なら ["afplay"]
+  }
+}
+```
+
+### 動き方で気をつけていること
+
+- **自分の声を自分で拾わない**: 読み上げている間と、その直後の数秒は耳を塞ぎます（`echoGuardSeconds`）。
+- **呼びかけないと反応しない**: テレビの音や家族の雑談で勝手に動き出さないよう、既定では名前を呼ぶまで聞き流します。
+- **夜でも返事はする**: 静かにしてほしいのは「勝手に鳴ること」なので、こちらから話しかけた返事は深夜でも声で返します。
 
 ## 性格を変える
 
@@ -154,7 +225,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 ## 開発
 
 ```bash
-npm test     # 38 件（スケジューラ、自我、口調、会話、統合）
+npm test     # 53 件（スケジューラ、自我、口調、耳と口、会話、統合）
 npm run demo # 一日を早送り
 ```
 

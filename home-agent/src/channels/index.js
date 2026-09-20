@@ -3,6 +3,8 @@ import { logger } from '../util/log.js';
 import { NtfyChannel } from './ntfy.js';
 import { AlexaChannel } from './alexa.js';
 import { TermuxChannel } from './termux.js';
+import { VoicevoxChannel } from './voicevox.js';
+import { SayChannel } from './say.js';
 
 const log = logger('channels');
 
@@ -18,7 +20,7 @@ class ConsoleChannel {
   }
 }
 
-const REGISTRY = { console: ConsoleChannel, ntfy: NtfyChannel, alexa: AlexaChannel, termux: TermuxChannel };
+const REGISTRY = { console: ConsoleChannel, ntfy: NtfyChannel, alexa: AlexaChannel, termux: TermuxChannel, voicevox: VoicevoxChannel, say: SayChannel };
 
 export class ChannelHub {
   constructor({ config, store }) {
@@ -37,6 +39,30 @@ export class ChannelHub {
       );
     }
     log.info(`有効な出力先: ${this.channels.map((c) => c.name).join(', ') || 'なし'}`);
+  }
+
+  /**
+   * 声だけで返す（通知は飛ばさない）。
+   * 話しかけられた返事をスマホの通知にも積むと、会話のたびに通知が溜まって鬱陶しい。
+   */
+  async sayAloud(text, { world = {}, now = new Date(), quietHoursApply = false } = {}) {
+    // 深夜でも、話しかけられた返事は声で返す。
+    // 静かにしてほしいのは「こちらから勝手に鳴ること」であって、
+    // 自分が今しゃべった相手が黙り込むことではない。
+    const lp = localParts(now, this.config.home.timezone);
+    const silent = quietHoursApply && inQuietHours(lp.minutes, this.config.home.quietHours);
+    const speakers = this.channels.filter((channel) => channel.speaks);
+    if (!speakers.length) return null;
+    const message = { text, title: this.config.persona.name, priority: 3, silent, anyoneHome: world.anyoneHome ?? null };
+    const entry = { at: new Date().toISOString(), text, kind: 'aloud', silent, delivered: [] };
+    for (const channel of speakers) {
+      try {
+        if (await channel.send(message)) entry.delivered.push(channel.name);
+      } catch (err) {
+        log.warn(`${channel.name} への読み上げで例外`, err.message);
+      }
+    }
+    return entry;
   }
 
   /**

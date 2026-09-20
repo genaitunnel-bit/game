@@ -85,6 +85,15 @@
     border: 1px solid var(--line); background: var(--card); color: var(--ink); box-shadow: var(--shadow);
   }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  .voicebar { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+  .mic { background: var(--accent-soft); border-color: transparent; color: var(--accent); }
+  .mic.on { background: var(--accent); color: #fff; animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(239, 138, 164, .5) } 50% { box-shadow: 0 0 0 9px rgba(239, 138, 164, 0) } }
+  @media (prefers-reduced-motion: reduce) { .mic.on { animation: none } }
+  .voicebar label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .voicebar input[type=checkbox] { accent-color: var(--accent); width: 16px; height: 16px; }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -100,6 +109,12 @@
   <div class="card"><h2>ひなたの日記</h2><div class="log" id="diary"></div></div>
 
   <form id="chat"><input id="text" placeholder="話しかける（例: ゴミ出しやった）" autocomplete="off"><button class="primary">おくる</button></form>
+  <div class="voicebar" id="voicebar" hidden>
+    <button type="button" class="mic" id="mic">🎤 はなす</button>
+    <label><input type="checkbox" id="always"> ずっと聞く</label>
+    <label><input type="checkbox" id="speakBack" checked> よみあげ</label>
+  </div>
+  <div class="hint" id="voicehint" hidden></div>
 
 <script>
 const token = new URLSearchParams(location.search).get('token') || localStorage.getItem('home-agent-token') || '';
@@ -195,10 +210,99 @@ async function load() {
   }
 }
 
-async function send(value) {
+async function send(value, aloud = false) {
   const { reply } = await api('/api/say', { method: 'POST', body: JSON.stringify({ text: value }) });
   say(reply, new Date().toISOString());
+  if (aloud) speakOut(reply);
   load();
+}
+
+// ------- 声で話しかける（Web Speech API）-------
+// 認識も読み上げもブラウザ側でやるので、サーバにも API キーにも依存しない。
+// Android Chrome と iOS Safari で動く。対応していないブラウザでは黙って隠れる。
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const canSpeak = 'speechSynthesis' in window;
+let recognition = null;
+let wantContinuous = false;
+let talking = false;
+
+function setMic(on) {
+  $('mic').classList.toggle('on', on);
+  $('mic').textContent = on ? '\u{1F3A4} きいてるよ' : '\u{1F3A4} はなす';
+}
+
+function hint(text) {
+  $('voicehint').hidden = !text;
+  $('voicehint').textContent = text || '';
+}
+
+function speakOut(text) {
+  if (!canSpeak || !$('speakBack').checked || !text) return;
+  talking = true;
+  try { recognition?.stop(); } catch {}
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = 'ja-JP';
+  utterance.rate = 1.05;
+  utterance.pitch = 1.2; // すこし高めのほうが、あの子の声に近い
+  utterance.onend = utterance.onerror = () => {
+    talking = false;
+    if (wantContinuous) startRecognition(true); // 自分の声を拾い終えてから耳を戻す
+  };
+  speechSynthesis.speak(utterance);
+}
+
+async function heard(text) {
+  // ずっと聞くモードでは、ウェイクワードの判断をサーバ側と共有する
+  const { handled, reply } = await api('/api/listen', { method: 'POST', body: JSON.stringify({ text }) });
+  if (!handled) { hint(`「${text}」は聞き流したよ（名前を呼んでから話してね）`); return; }
+  say(reply, new Date().toISOString());
+  speakOut(reply);
+  load();
+}
+
+function startRecognition(continuous) {
+  if (!SR || talking) return;
+  try { recognition?.abort(); } catch {}
+  recognition = new SR();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = continuous;
+  recognition.interimResults = false;
+  recognition.onstart = () => setMic(true);
+  recognition.onresult = (event) => {
+    const text = Array.from(event.results).slice(event.resultIndex).map((r) => r[0].transcript).join('').trim();
+    if (!text) return;
+    if (continuous) heard(text);
+    else { hint(''); send(text, true); }
+  };
+  recognition.onerror = (event) => {
+    if (event.error === 'not-allowed') {
+      hint('マイクの許可が必要だよ');
+      wantContinuous = false;
+      $('always').checked = false;
+    }
+  };
+  recognition.onend = () => {
+    setMic(false);
+    if (wantContinuous && !talking) setTimeout(() => startRecognition(true), 400);
+  };
+  recognition.start();
+}
+
+if (SR) {
+  $('voicebar').hidden = false;
+  $('speakBack').checked = localStorage.getItem('home-agent-speak') !== '0';
+  $('speakBack').onchange = () => localStorage.setItem('home-agent-speak', $('speakBack').checked ? '1' : '0');
+  $('mic').onclick = () => {
+    if ($('mic').classList.contains('on')) { wantContinuous = false; recognition?.stop(); return; }
+    startRecognition(false);
+  };
+  $('always').onchange = () => {
+    wantContinuous = $('always').checked;
+    hint(wantContinuous ? '名前を呼んでから話しかけてね' : '');
+    if (wantContinuous) startRecognition(true);
+    else recognition?.stop();
+  };
 }
 
 $('chat').onsubmit = (event) => {

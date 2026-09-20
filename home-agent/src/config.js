@@ -20,6 +20,13 @@ export const DEFAULTS = {
   tasks: [],
   sensors: { presence: { enabled: false, method: 'ping' }, weather: { enabled: false } },
   channels: { console: { enabled: true } },
+  ears: {
+    provider: 'browser', // 'browser' | 'command' | 'none'
+    wakeWords: null, // 未指定なら persona.name（「ひなた」）を呼び名にする
+    alwaysOn: false,
+    followUpSeconds: 25,
+    echoGuardSeconds: 2,
+  },
   llm: { enabled: false, provider: 'anthropic', model: 'claude-opus-5', apiKeyEnv: 'ANTHROPIC_API_KEY', maxTokens: 300 },
   server: { enabled: true, host: '127.0.0.1', port: 8787, tokenEnv: 'HOME_AGENT_TOKEN' },
   storePath: 'data/state.json',
